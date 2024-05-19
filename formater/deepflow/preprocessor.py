@@ -34,7 +34,6 @@ json_string = '''
 
 
 def compute_hash(obj):
-    # Create a copy of the input object so the original data is not mutated
     sorted_obj = copy.deepcopy(obj)
 
     if isinstance(sorted_obj, dict):
@@ -43,7 +42,6 @@ def compute_hash(obj):
 
         sorted_obj = OrderedDict(sorted(sorted_obj.items()))
 
-        # Compute SHA256 hash
         hash_object = hashlib.md5(json.dumps(sorted_obj, sort_keys=True).encode())
         sorted_obj['__hash__'] = hash_object.hexdigest()
 
@@ -56,7 +54,7 @@ def compute_hash(obj):
 def extract_data(obj):
     if isinstance(obj, dict):
         copy_obj = copy.deepcopy(obj)
-        for key in list(copy_obj.keys()):  # Need to create a copy of keys list since we modify dict in loop
+        for key in list(copy_obj.keys()):
             if key == "__meta_id__" or key == "__meta_type__":  # Remove meta keys
                 del copy_obj[key]
             else:  # Process nested dictionaries
@@ -71,8 +69,7 @@ def extract_data(obj):
 def extract_meta(obj):
     if isinstance(obj, dict):
         copy_obj = copy.deepcopy(obj)
-        for key in list(copy_obj.keys()):  # Need to create a copy of keys list since we modify dict in loop
-            # Process nested dictionaries
+        for key in list(copy_obj.keys()):
             if key != "__meta_id__" and key != "__meta_type__" and not isinstance(copy_obj[key], (dict, list)):
                 del copy_obj[key]
             else:
@@ -85,21 +82,24 @@ def extract_meta(obj):
 
 
 def merge_json(hash_data, hash_meta):
-    # Check if json1 & json2 are both dict, so we can go deeper
-    copy_hash_data = copy.deepcopy(hash_data)
-    if isinstance(copy_hash_data, dict):
-        for key in copy_hash_data.keys():
-            if isinstance(copy_hash_data[key], dict):
-                copy_hash_data[key] = merge_json(copy_hash_data[key], hash_meta[key])
-            elif isinstance(copy_hash_data[key], list):
-                for i in range(len(copy_hash_data[key])):
-                    copy_hash_data[key][i] = merge_json(copy_hash_data[key][i], hash_meta[key][i])
+    return _merge_internal(copy.deepcopy(hash_data), copy.deepcopy(hash_meta))
+
+
+def _merge_internal(hash_data, hash_meta):
+    if isinstance(hash_data, dict):
+        for key in hash_data.keys():
+            if isinstance(hash_data[key], (dict, list)):
+                hash_data[key] = merge_json(hash_data[key], hash_meta[key])
             else:
                 if key == '__hash__':
-                    copy_hash_data["__meta_id__"] = f"ID:{hash_meta['__meta_id__']}-{copy_hash_data['__hash__']}-{hash_meta['__hash__']}"
-                    copy_hash_data["__meta_type__"] = hash_meta['__meta_type__']
-                    del copy_hash_data["__hash__"]
-    return copy_hash_data
+                    hash_data["__meta_id__"] = f"ID:{hash_meta['__meta_id__']}-{hash_data['__hash__']}-{hash_meta['__hash__']}"
+                    hash_data["__meta_type__"] = hash_meta['__meta_type__']
+                    del hash_data["__hash__"]
+    elif isinstance(hash_data, list):
+        for i in range(len(hash_data)):
+            hash_data[i] = merge_json(hash_data[i], hash_meta[i])
+
+    return hash_data
 
 
 def hash_update(json_str):
