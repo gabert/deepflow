@@ -1,5 +1,5 @@
 # Java/Maven project files
-/target/
+**/target/
 *.iml
 .idea/
 .idea_modules/
@@ -23,8 +23,10 @@ venv/
 env/
 
 # IDE-specific files (add more as needed)
-/.vscode/
-/.idea/
+**/.vscode/
+**/.idea/
+**/*.iml
+**/*.iws
 
 # Logs and databases
 *.log

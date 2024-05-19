@@ -11,13 +11,9 @@ public class Main {
         System.out.println(sayHelloTo(name));
         printAgeToConsole(name, calculateAge(2024,1986));
 
-        Person person = null;
-
-        person = createPerson(name, "London");
+        Person person = createPerson(name, "London");
 
         printPerson(person);
-
-        person.address = null;
 
         person.address.town = "Paris";
 

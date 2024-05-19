@@ -12,24 +12,23 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalTime;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Stream;
 
 
 public class DeepFlowAdvice {
-    public static Map<String, Integer> COUNTER = new HashMap<>();
-    public static String FILE_NAME = "D:\\temp\\agent_log.dmp";
-    public static Gson GSON_DATA = new GsonBuilder()
-            .registerTypeAdapterFactory(new MetaIdTypeAdapterFactory())
-            .create();
-    public static Gson GSON_EXCEPTION = new Gson();
-    public static String DELIMITER = ";";
+    public final static Map<String, Integer> COUNTER = new HashMap<>();
+    public final static String FILE_NAME = "D:\\temp\\agent_log.dmp";
+    public final static Gson GSON_DATA;
+    public static final Gson GSON_EXCEPTION;
+    public final static String DELIMITER = ";";
 
 
     static {
-
+        GSON_EXCEPTION = new Gson();
+        GSON_DATA = new GsonBuilder()
+                .registerTypeAdapterFactory(new MetaIdTypeAdapterFactory())
+                .create();
     }
 
     @Advice.OnMethodEnter
@@ -87,37 +86,18 @@ public class DeepFlowAdvice {
     }
 
     public static class ExceptionInfo {
-        private String message;
-        private String stackTrace;
+        private final String message;
+        private final List<String> stacktrace;
 
         public ExceptionInfo(Throwable exception) {
             this.message = exception.getMessage();
-            this.stackTrace = getStackTraceAsString(exception);
+            this.stacktrace = getStackTraceAsString(exception);
         }
 
-        private String getStackTraceAsString(Throwable exception) {
-            StringBuilder stackTrace = new StringBuilder();
-            for (StackTraceElement element : exception.getStackTrace()) {
-                stackTrace.append(element.toString()).append("\n");
-            }
-            return stackTrace.toString();
-        }
-
-        // Getters and setters
-        public String getMessage() {
-            return message;
-        }
-
-        public void setMessage(String message) {
-            this.message = message;
-        }
-
-        public String getStackTrace() {
-            return stackTrace;
-        }
-
-        public void setStackTrace(String stackTrace) {
-            this.stackTrace = stackTrace;
+        private List<String> getStackTraceAsString(Throwable exception) {
+            return Stream.of(exception.getStackTrace())
+                    .map(StackTraceElement::toString)
+                    .toList();
         }
     }
 }
