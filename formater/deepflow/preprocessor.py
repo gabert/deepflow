@@ -23,9 +23,9 @@ def compute_hash(obj):
 def extract_data(obj):
     if isinstance(obj, dict):
         for key in list(obj.keys()):
-            if key == "__meta_id__" or key == "__meta_type__":  # Remove meta keys
+            if key == "__meta_id__" or key == "__meta_type__":
                 del obj[key]
-            else:  # Process nested dictionaries
+            else:
                 obj[key] = extract_data(obj[key])
         return obj
     elif isinstance(obj, list):  # Process list items
@@ -42,7 +42,7 @@ def extract_meta(obj):
             else:
                 obj[key] = extract_meta(obj[key])
         return obj
-    elif isinstance(obj, list):  # Process list items
+    elif isinstance(obj, list):
         return [extract_meta(item) for item in obj]
     else:
         return obj
@@ -53,12 +53,10 @@ def merge_json(hash_data, hash_meta):
         for key in hash_data.keys():
             if isinstance(hash_data[key], (dict, list)):
                 hash_data[key] = merge_json(hash_data[key], hash_meta[key])
-            else:
-                if key == '__hash__':
-                    hash_data[
-                        "__meta_id__"] = f"ID:{hash_meta['__meta_id__']}-{hash_data['__hash__']}-{hash_meta['__hash__']}"
-                    hash_data["__meta_type__"] = hash_meta['__meta_type__']
-                    del hash_data["__hash__"]
+            elif key == '__hash__':
+                hash_data["__meta_id__"] = f"ID:{hash_meta['__meta_id__']}-{hash_data['__hash__']}-{hash_meta['__hash__']}"
+                hash_data["__meta_type__"] = hash_meta['__meta_type__']
+                del hash_data["__hash__"]
     elif isinstance(hash_data, list):
         for i in range(len(hash_data)):
             hash_data[i] = merge_json(hash_data[i], hash_meta[i])

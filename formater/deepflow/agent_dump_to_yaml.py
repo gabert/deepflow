@@ -26,9 +26,7 @@ def dump_to_yaml(yaml_entries, yaml_file):
 def process_line(line, previous_level):
     record_formats = {
         "MS": lambda record: format_ms(record, previous_level),
-        "AI": lambda record: format_element(record, "AI"),
         "AR": lambda record: format_element(record, "AR"),
-        "RI": lambda record: format_element(record, "RI"),
         "RE": lambda record: format_element(record, "RE")
     }
 

@@ -17,8 +17,9 @@ import java.util.stream.Stream;
 
 
 public class DeepFlowAdvice {
+    public static AgentConfig CONFIG;
+    public static String FILE_NAME;
     public final static Map<String, Integer> COUNTER = new HashMap<>();
-    public final static String FILE_NAME = "D:\\temp\\agent_log.dmp";
     public final static Gson GSON_DATA;
     public static final Gson GSON_EXCEPTION;
     public final static String DELIMITER = ";";
@@ -29,6 +30,10 @@ public class DeepFlowAdvice {
         GSON_DATA = new GsonBuilder()
                 .registerTypeAdapterFactory(new MetaIdTypeAdapterFactory())
                 .create();
+    }
+
+    public static void setup(AgentConfig CONFIG) {
+        FILE_NAME = Paths.get(CONFIG.getDumpLocation(), "agent_log.dmp").toString();
     }
 
     @Advice.OnMethodEnter
