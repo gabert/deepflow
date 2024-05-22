@@ -32,8 +32,8 @@ public class AgentConfig {
         AgentConfig config = new AgentConfig();
 
         config.dumpLocation = configMap.get("session_dump_location");
-        config.packageMatchers.addAll(Arrays.stream(configMap.get("package_matchers")
-                .split(","))
+        String packageMatcher = configMap.getOrDefault("package_matchers", "com.,org.");
+        config.packageMatchers.addAll(Arrays.stream(packageMatcher.split(","))
                 .map(String::trim)
                 .toList());
 

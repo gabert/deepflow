@@ -29,8 +29,8 @@ public class DeepFlowAgent {
         Advice advice = Advice.to(DeepFlowAdvice.class);
 
         ElementMatcher.Junction<TypeDescription> packageMatcher = ElementMatchers.none();
-        for (String pkg : agentConfig.getPackageMatchers()) {
-            packageMatcher = packageMatcher.or(ElementMatchers.nameStartsWith(pkg));
+        for (String regex : agentConfig.getPackageMatchers()) {
+            packageMatcher = packageMatcher.or(ElementMatchers.nameMatches(regex));
         }
 
         new AgentBuilder.Default()
