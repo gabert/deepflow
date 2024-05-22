@@ -1,29 +1,27 @@
 package com.github.gabert.deepflow.agent;
 
+import com.github.gabert.deepflow.serializer.Destination;
+import com.github.gabert.deepflow.serializer.FileDestination;
 import com.github.gabert.deepflow.serializer.MetaIdTypeAdapterFactory;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Stream;
 
 
 public class DeepFlowAdvice {
-    public static AgentConfig CONFIG;
-    public static String FILE_NAME;
-    public final static Map<String, Integer> COUNTER = new HashMap<>();
+    private static AgentConfig CONFIG;
+    public final static Map<String, Integer> DEPTH = new HashMap<>();
     public final static Gson GSON_DATA;
     public static final Gson GSON_EXCEPTION;
     public final static String DELIMITER = ";";
-
+    public static Destination DESTINATION;
 
     static {
         GSON_EXCEPTION = new Gson();
@@ -32,15 +30,22 @@ public class DeepFlowAdvice {
                 .create();
     }
 
-    public static void setup(AgentConfig CONFIG) {
-        FILE_NAME = Paths.get(CONFIG.getDumpLocation(), "agent_log.dmp").toString();
+    public static void setup(AgentConfig agentConfig) {
+        CONFIG = agentConfig;
+        DESTINATION = new FileDestination(agentConfig, generateSessionId());
+    }
+
+    public static String generateSessionId() {
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+        return now.format(formatter);
     }
 
     @Advice.OnMethodEnter
     public static void onEnter(@Advice.Origin String origin,
                                @Advice.AllArguments Object[] allArguments) {
-        appendToFile("MS" + DELIMITER + LocalTime.now() + DELIMITER + origin);
-        appendToFile("AR" + DELIMITER + GSON_DATA.toJson(allArguments));
+        sentToDestination("MS" + DELIMITER + LocalTime.now() + DELIMITER + origin);
+        sentToDestination("AR" + DELIMITER + GSON_DATA.toJson(allArguments));
 
         incrementCounter();
     }
@@ -54,40 +59,32 @@ public class DeepFlowAdvice {
 
         if (throwable != null) {
             String exceptionString = GSON_EXCEPTION.toJson(new ExceptionInfo(throwable));
-            appendToFile("EX" + DELIMITER + exceptionString);
+            sentToDestination("EX" + DELIMITER + exceptionString);
         } else {
             List<Object> values = returned == null ? Collections.EMPTY_LIST : List.of(returned);
-            appendToFile("RE" + DELIMITER + GSON_DATA.toJson(values));
+            sentToDestination("RE" + DELIMITER + GSON_DATA.toJson(values));
         }
 
-        appendToFile("ME" + DELIMITER + LocalTime.now() + DELIMITER + origin);
+        sentToDestination("ME" + DELIMITER + LocalTime.now() + DELIMITER + origin);
     }
 
     public static void incrementCounter() {
         String threadName = Thread.currentThread().getName();
-        COUNTER.compute(threadName, (k, v) -> (v == null) ? 0 : v + 1);
+        DEPTH.compute(threadName, (k, v) -> (v == null) ? 0 : v + 1);
     }
 
     public static void decrementCounter() {
         String threadName = Thread.currentThread().getName();
-        COUNTER.compute(threadName, (k, v) -> (v == null) ? 0 : v - 1);
+        DEPTH.compute(threadName, (k, v) -> (v == null) ? 0 : v - 1);
     }
 
-    public static void appendToFile(String data) {
+    public static void sentToDestination(String data) {
         String threadName = Thread.currentThread().getName();
-        COUNTER.compute(threadName, (k, v) -> (v == null) ? 0 : v);
+        DEPTH.compute(threadName, (k, v) -> (v == null) ? 0 : v);
 
-        String filePath = FILE_NAME;
-        String line = (COUNTER.get(threadName) + DELIMITER + threadName + DELIMITER + data + System.lineSeparator());
+        String line = DEPTH.get(threadName) + DELIMITER + threadName + DELIMITER + data + System.lineSeparator();
 
-        try {
-            Path path = Paths.get(filePath);
-            Files.write(path, line.getBytes(),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND);
-        } catch (IOException e) {
-            // pass
-        }
+        DESTINATION.send(line, threadName);
     }
 
     public static class ExceptionInfo {
