@@ -1,15 +1,19 @@
 package com.github.gabert.deepflow.agent;
 
 import java.io.*;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 
 public class AgentConfig {
     private String dumpLocation;
+    private final List<String> packageMatchers = new ArrayList<>();
 
     public String getDumpLocation() {
         return dumpLocation;
+    }
+
+    public List<String> getPackageMatchers() {
+        return packageMatchers;
     }
 
     public static AgentConfig getInstance(String agentArgs) throws IOException {
@@ -28,10 +32,13 @@ public class AgentConfig {
         AgentConfig config = new AgentConfig();
 
         config.dumpLocation = configMap.get("session_dump_location");
+        config.packageMatchers.addAll(Arrays.stream(configMap.get("package_matchers")
+                .split(","))
+                .map(String::trim)
+                .toList());
 
         return config;
     }
-
 
     private static Map<String, String> loadFromString(String agentArgs) throws IOException {
         Map<String, String> configMapParams = new HashMap<>();
@@ -40,7 +47,7 @@ public class AgentConfig {
             return configMapParams;
         }
 
-        for (String arg : agentArgs.split(",")) {
+        for (String arg : agentArgs.split("&")) {
             String[] keyValue = arg.split("=");
             if (keyValue.length == 2) {
                 String key = keyValue[0].trim();

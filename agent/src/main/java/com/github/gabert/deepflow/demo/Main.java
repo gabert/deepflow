@@ -1,10 +1,7 @@
 package com.github.gabert.deepflow.demo;
 
-import com.github.gabert.deepflow.agent.Marker;
-
 import java.util.Objects;
 
-@Marker
 public class Main {
     public static void main(String[] args) {
         String name = "John";
@@ -19,7 +16,7 @@ public class Main {
 
         printPerson(person);
 
-        Person clonedPerson = clone(person);
+        Person clonedPerson = person.clone();
 
         printPerson(clonedPerson);
     }
@@ -49,10 +46,6 @@ public class Main {
         address.town = town;
 
         return address;
-    }
-
-    public static Person clone(Person person) {
-        return person.clone();
     }
 
     private static void printPerson(Person person) {
