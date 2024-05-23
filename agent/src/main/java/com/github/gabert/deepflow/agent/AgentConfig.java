@@ -5,15 +5,41 @@ import java.util.*;
 
 
 public class AgentConfig {
-    private String dumpLocation;
-    private final List<String> packageMatchers = new ArrayList<>();
+    private final String dumpLocation;
+    private final List<String> matchersInclude = new ArrayList<>();
+    private final List<String> matchersExclude = new ArrayList<>();
+    private final String triggerOn;
+
+    private AgentConfig(Map<String, String> configMap) {
+        this.dumpLocation = configMap.get("session_dump_location");
+
+        String matcherInclude = configMap.getOrDefault("matchers_include", "com.,org.");
+        this.matchersInclude.addAll(Arrays.stream(matcherInclude.split(","))
+                .map(String::trim)
+                .toList());
+
+        String matcherExclude = configMap.getOrDefault("matchers_exclude", "com.,org.");
+        this.matchersExclude.addAll(Arrays.stream(matcherExclude.split(","))
+                .map(String::trim)
+                .toList());
+
+        this.triggerOn = configMap.getOrDefault("trigger_on", null);
+    }
 
     public String getDumpLocation() {
         return dumpLocation;
     }
 
-    public List<String> getPackageMatchers() {
-        return packageMatchers;
+    public List<String> getMatchersInclude() {
+        return matchersInclude;
+    }
+
+    public List<String> getMatchersExclude() {
+        return matchersExclude;
+    }
+
+    public String getTriggerOn() {
+        return triggerOn;
     }
 
     public static AgentConfig getInstance(String agentArgs) throws IOException {
@@ -29,18 +55,10 @@ public class AgentConfig {
         configMap.putAll(configMapFile);
         configMap.putAll(configMapParams);
 
-        AgentConfig config = new AgentConfig();
-
-        config.dumpLocation = configMap.get("session_dump_location");
-        String packageMatcher = configMap.getOrDefault("package_matchers", "com.,org.");
-        config.packageMatchers.addAll(Arrays.stream(packageMatcher.split(","))
-                .map(String::trim)
-                .toList());
-
-        return config;
+        return new AgentConfig(configMap);
     }
 
-    private static Map<String, String> loadFromString(String agentArgs) throws IOException {
+    private static Map<String, String> loadFromString(String agentArgs) {
         Map<String, String> configMapParams = new HashMap<>();
 
         if (agentArgs == null) {
@@ -64,8 +82,14 @@ public class AgentConfig {
 
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
             String line;
+
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
+
+                if (line.startsWith("#")) {
+                    continue;
+                }
+
                 if (line.contains("=")) {
                     String[] parts = line.split("=", 2);
                     configMapFile.put(parts[0].trim(), parts[1].trim());

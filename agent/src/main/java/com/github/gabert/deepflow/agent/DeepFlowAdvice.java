@@ -16,7 +16,7 @@ import java.util.stream.Stream;
 
 
 public class DeepFlowAdvice {
-    private static AgentConfig CONFIG;
+    public static AgentConfig CONFIG;
     public final static Map<String, Integer> DEPTH = new HashMap<>();
     public final static Gson GSON_DATA;
     public static final Gson GSON_EXCEPTION;
@@ -42,18 +42,39 @@ public class DeepFlowAdvice {
     }
 
     @Advice.OnMethodEnter
-    public static void onEnter(@Advice.Origin String origin,
+    public static void onEnter(@Advice.Origin String method,
                                @Advice.AllArguments Object[] allArguments) {
-        sentToDestination("MS" + DELIMITER + LocalTime.now() + DELIMITER + origin);
+
+        if (CONFIG.getTriggerOn() != null && ! CONFIG.getTriggerOn().isBlank()) {
+            if (isConditionMet(method)) {
+                Trigger.IS_CONDITION_MET.set(Boolean.TRUE);
+            }
+
+            if (! Trigger.IS_CONDITION_MET.get()) {
+                return;
+            }
+        }
+
+        sentToDestination("MS" + DELIMITER + LocalTime.now() + DELIMITER + method);
         sentToDestination("AR" + DELIMITER + GSON_DATA.toJson(allArguments));
 
         incrementCounter();
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class)
-    public static void onExit(@Advice.Origin String origin,
+    public static void onExit(@Advice.Origin String method,
                               @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returned,
                               @Advice.Thrown Throwable throwable) {
+
+        if (CONFIG.getTriggerOn() != null && ! CONFIG.getTriggerOn().isBlank()) {
+            if (!Trigger.IS_CONDITION_MET.get()) {
+                return;
+            }
+
+            if (isConditionMet(method)) {
+                Trigger.IS_CONDITION_MET.set(Boolean.FALSE);
+            }
+        }
 
         decrementCounter();
 
@@ -65,7 +86,12 @@ public class DeepFlowAdvice {
             sentToDestination("RE" + DELIMITER + GSON_DATA.toJson(values));
         }
 
-        sentToDestination("ME" + DELIMITER + LocalTime.now() + DELIMITER + origin);
+        sentToDestination("ME" + DELIMITER + LocalTime.now() + DELIMITER + method);
+    }
+
+    // FIXME: Must be thread scoped
+    public static boolean isConditionMet(String method) {
+        return method.equals(CONFIG.getTriggerOn());
     }
 
     public static void incrementCounter() {

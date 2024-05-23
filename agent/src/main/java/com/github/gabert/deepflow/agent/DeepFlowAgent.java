@@ -28,13 +28,18 @@ public class DeepFlowAgent {
 
         Advice advice = Advice.to(DeepFlowAdvice.class);
 
-        ElementMatcher.Junction<TypeDescription> packageMatcher = ElementMatchers.none();
-        for (String regex : agentConfig.getPackageMatchers()) {
-            packageMatcher = packageMatcher.or(ElementMatchers.nameMatches(regex));
+        ElementMatcher.Junction<TypeDescription> matcherInclude = ElementMatchers.none();
+        for (String regex : agentConfig.getMatchersInclude()) {
+            matcherInclude = matcherInclude.or(ElementMatchers.nameMatches(regex));
+        }
+
+        ElementMatcher.Junction<TypeDescription> matcherExclude = ElementMatchers.none();
+        for (String regex : agentConfig.getMatchersExclude()) {
+            matcherExclude = matcherExclude.or(ElementMatchers.nameMatches(regex));
         }
 
         new AgentBuilder.Default()
-                .type(packageMatcher)
+                .type(matcherInclude.and(ElementMatchers.not(matcherExclude)))
                 .transform((DynamicType.Builder<?> builder,
                             TypeDescription type,
                             ClassLoader loader,
