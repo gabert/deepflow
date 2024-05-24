@@ -45,14 +45,8 @@ public class DeepFlowAdvice {
     public static void onEnter(@Advice.Origin String method,
                                @Advice.AllArguments Object[] allArguments) {
 
-        if (CONFIG.getTriggerOn() != null && ! CONFIG.getTriggerOn().isBlank()) {
-            if (isConditionMet(method)) {
-                Trigger.IS_CONDITION_MET.set(Boolean.TRUE);
-            }
-
-            if (! Trigger.IS_CONDITION_MET.get()) {
-                return;
-            }
+        if ( ! Trigger.shouldExecuteOnEnter(CONFIG.getTriggerOn(), method) ) {
+            return;
         }
 
         sentToDestination("MS" + DELIMITER + LocalTime.now() + DELIMITER + method);
@@ -66,14 +60,8 @@ public class DeepFlowAdvice {
                               @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returned,
                               @Advice.Thrown Throwable throwable) {
 
-        if (CONFIG.getTriggerOn() != null && ! CONFIG.getTriggerOn().isBlank()) {
-            if (!Trigger.IS_CONDITION_MET.get()) {
-                return;
-            }
-
-            if (isConditionMet(method)) {
-                Trigger.IS_CONDITION_MET.set(Boolean.FALSE);
-            }
+        if ( ! Trigger.shouldExecuteOnExit(CONFIG.getTriggerOn(), method) ) {
+            return;
         }
 
         decrementCounter();
@@ -87,11 +75,6 @@ public class DeepFlowAdvice {
         }
 
         sentToDestination("ME" + DELIMITER + LocalTime.now() + DELIMITER + method);
-    }
-
-    // FIXME: Must be thread scoped
-    public static boolean isConditionMet(String method) {
-        return method.equals(CONFIG.getTriggerOn());
     }
 
     public static void incrementCounter() {
