@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 
 public class DeepFlowAdvice {
     public static AgentConfig CONFIG;
@@ -45,12 +45,18 @@ public class DeepFlowAdvice {
     public static void onEnter(@Advice.Origin String method,
                                @Advice.AllArguments Object[] allArguments) {
 
-        if ( ! Trigger.shouldExecuteOnEnter(CONFIG.getTriggerOn(), method) ) {
-            return;
-        }
+//        if ( ! Trigger.shouldExecuteOnEnter(CONFIG.getTriggerOn(), method) ) {
+//            return;
+//        }
+        LocalTime ts = LocalTime.now();
 
-        sentToDestination("MS" + DELIMITER + LocalTime.now() + DELIMITER + method);
-        sentToDestination("AR" + DELIMITER + GSON_DATA.toJson(allArguments));
+        String data = Stream.of(allArguments).
+                map(GSON_DATA::toJson).
+                collect(Collectors.joining(", "));
+
+        sentToDestination("MS" + DELIMITER + method);
+        sentToDestination("TS" + DELIMITER + ts);
+        sentToDestination("AR" + DELIMITER +  "[" + data + "]");
 
         incrementCounter();
     }
@@ -60,9 +66,9 @@ public class DeepFlowAdvice {
                               @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returned,
                               @Advice.Thrown Throwable throwable) {
 
-        if ( ! Trigger.shouldExecuteOnExit(CONFIG.getTriggerOn(), method) ) {
-            return;
-        }
+//        if ( ! Trigger.shouldExecuteOnExit(CONFIG.getTriggerOn(), method) ) {
+//            return;
+//        }
 
         decrementCounter();
 
@@ -74,7 +80,9 @@ public class DeepFlowAdvice {
             sentToDestination("RE" + DELIMITER + GSON_DATA.toJson(values));
         }
 
-        sentToDestination("ME" + DELIMITER + LocalTime.now() + DELIMITER + method);
+        LocalTime ts = LocalTime.now();
+        sentToDestination("TE" + DELIMITER + ts);
+        sentToDestination("ME" + DELIMITER + method);
     }
 
     public static void incrementCounter() {
