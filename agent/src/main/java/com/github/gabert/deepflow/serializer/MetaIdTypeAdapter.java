@@ -21,14 +21,21 @@ public class MetaIdTypeAdapter<T> extends TypeAdapter<T> {
         if (jsonElement.isJsonObject()) {
             JsonObject jsonObject = jsonElement.getAsJsonObject();
             int systemId = System.identityHashCode(value);
-            jsonObject.addProperty("__meta_id__", systemId);
-            jsonObject.addProperty("__meta_type__", value.getClass().getName());
+            jsonObject.addProperty("__type__", value.getClass().getName());
+            jsonObject.addProperty("__id__", systemId);
         } else if (jsonElement.isJsonArray()) {
             JsonObject jsonObject = new JsonObject();
             int systemId = System.identityHashCode(value);
-            jsonObject.addProperty("__meta_id__", systemId);
-            jsonObject.addProperty("__meta_type__", value.getClass().getName());
-            jsonObject.add("__meta_array__", jsonElement);
+            jsonObject.addProperty("__type__", value.getClass().getName());
+            jsonObject.addProperty("__id__", systemId);
+            jsonObject.add("__array__", jsonElement);
+            jsonElement = jsonObject;
+        } else if (jsonElement.isJsonPrimitive()) {
+            JsonObject jsonObject = new JsonObject();
+            int systemId = System.identityHashCode(value);
+            jsonObject.addProperty("__type__", value.getClass().getName());
+            jsonObject.addProperty("__id__", systemId);
+            jsonObject.add("__value__", jsonElement);
             jsonElement = jsonObject;
         }
 
