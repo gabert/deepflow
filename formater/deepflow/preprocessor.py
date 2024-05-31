@@ -68,6 +68,15 @@ def hash_update(json_str):
     json_meta = extract_meta(copy.deepcopy(json_input))
     json_hash_data = compute_hash(copy.deepcopy(json_data))
     json_hash_meta = compute_hash(copy.deepcopy(json_meta))
+
     json_data_merged = merge_json(copy.deepcopy(json_hash_data), copy.deepcopy(json_hash_meta))
+    print(json.dumps(json_data_merged))
 
     return json_data_merged
+
+
+if __name__ == "__main__":
+    json_string = '{"town": {"__value__": "London", "__id__": "ID:1320388319-34ca503c7a2feca3893ff39d9aab8249-00aacf90fc657a6ac457cbc724d6a33b", "__type__": "java.lang.String"}, "__id__": "ID:768185844-04860d9e02dd187208127804f5227b46-5358546a72904e5659c4bdb6340157ac", "__type__": "com.github.gabert.deepflow.demo.Main$Address"}'
+    # json_string = '[{"__type__":"java.lang.String","__id__":125844477,"__value__":"John"}, {"__type__":"java.lang.String","__id__":1320388319,"__value__":"London"}]'
+
+    hash_update(json_string)

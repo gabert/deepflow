@@ -76,8 +76,9 @@ public class DeepFlowAdvice {
             String exceptionString = GSON_EXCEPTION.toJson(new ExceptionInfo(throwable));
             sentToDestination("EX" + DELIMITER + exceptionString);
         } else {
-            List<Object> values = returned == null ? Collections.EMPTY_LIST : List.of(returned);
-            sentToDestination("RE" + DELIMITER + GSON_DATA.toJson(values));
+//            List<Object> values = returned == null ? Collections.EMPTY_LIST : List.of(returned);
+//            sentToDestination("RE" + DELIMITER + GSON_DATA.toJson(values));
+            sentToDestination("RE" + DELIMITER + GSON_DATA.toJson(returned));
         }
 
         LocalTime ts = LocalTime.now();

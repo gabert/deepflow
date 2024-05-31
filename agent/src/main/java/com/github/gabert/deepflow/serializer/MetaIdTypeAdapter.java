@@ -28,7 +28,7 @@ public class MetaIdTypeAdapter<T> extends TypeAdapter<T> {
             int systemId = System.identityHashCode(value);
             jsonObject.addProperty("__type__", value.getClass().getName());
             jsonObject.addProperty("__id__", systemId);
-            jsonObject.add("__array__", jsonElement);
+            jsonObject.add("__value__", jsonElement);
             jsonElement = jsonObject;
         } else if (jsonElement.isJsonPrimitive()) {
             JsonObject jsonObject = new JsonObject();

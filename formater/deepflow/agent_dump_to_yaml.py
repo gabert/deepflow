@@ -103,17 +103,8 @@ def format_ts(record, tag):
 def format_ar(record):
     json_string = record['value']
     data_hashed = preprocessor.hash_update(json_string)
-    raw_data, meta_data = metadata_strip.strip_and_separate_metadata(data_hashed)
-
-    # Print results
-    print("Original JSON:")
-    print(json.dumps(data_hashed, indent=4))
-
-    print("Data JSON:")
-    print(json.dumps(raw_data, indent=4))
-
-    print("\nMetadata JSON:")
-    print(json.dumps(meta_data, indent=4))
+    raw_data = metadata_strip.extract_data(data_hashed)
+    meta_data = metadata_strip.extract_metadata(data_hashed)
 
     raw_data_yaml_lines = convert_to_yaml(raw_data, "AR", record['type'], record['depth'])
     meta_data_yaml_lines = convert_to_yaml(meta_data, "AI", record['type'], record['depth'])
@@ -137,7 +128,8 @@ def convert_to_yaml(data, tag, record_type, depth):
 def format_re(record):
     json_string = record['value']
     data_hashed = preprocessor.hash_update(json_string)
-    raw_data, meta_data = metadata_strip.strip_and_separate_metadata(data_hashed)
+    raw_data = metadata_strip.extract_data(data_hashed)
+    meta_data = metadata_strip.extract_metadata(data_hashed)
 
     raw_data_yaml_lines = convert_to_yaml(raw_data, "RE", record['type'], record['depth'])
     meta_data_yaml_lines = convert_to_yaml(meta_data, "RI", record['type'], record['depth'])
@@ -164,4 +156,4 @@ def open_file(filename, mode='r'):
 
 
 if __name__ == '__main__':
-    process_session('D:\\temp\\SESSION-20240531_215607')
+    process_session('D:\\temp\\SESSION-20240531_223246')
