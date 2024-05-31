@@ -2,7 +2,7 @@ import json
 import yaml
 import os
 
-from deepflow import preprocessor
+from deepflow import preprocessor, metadata_strip
 
 delimiter = ";"
 indent = 4
@@ -82,7 +82,7 @@ def parse_fields_ts(fields):
 
 def format_ms(record, previous_level):
     data = record['value']
-    offset_string = ' ' * indent_size(record)
+    offset_string = ' ' * indent_size(record['type'], record['depth'])
     yaml_lines = []
 
     if record['depth'] > previous_level:
@@ -94,53 +94,64 @@ def format_ms(record, previous_level):
 
 def format_ts(record, tag):
     data = record['value']
-    offset_string = ' ' * indent_size(record)
+    offset_string = ' ' * indent_size(record['type'], record['depth'])
     yaml_lines = []
     yaml_lines.append(f"{offset_string}{tag}: '{data}'")
     return yaml_lines
 
 
 def format_ar(record):
-    yaml_data = json_to_yaml(record['value'], "AR")
-    offset_string = ' ' * indent_size(record)
+    json_string = record['value']
+    data_hashed = preprocessor.hash_update(json_string)
+    raw_data, meta_data = metadata_strip.strip_and_separate_metadata(data_hashed)
+
+    # Print results
+    print("Original JSON:")
+    print(json.dumps(data_hashed, indent=4))
+
+    print("Data JSON:")
+    print(json.dumps(raw_data, indent=4))
+
+    print("\nMetadata JSON:")
+    print(json.dumps(meta_data, indent=4))
+
+    raw_data_yaml_lines = convert_to_yaml(raw_data, "AR", record['type'], record['depth'])
+    meta_data_yaml_lines = convert_to_yaml(meta_data, "AI", record['type'], record['depth'])
+
+    yaml_lines = raw_data_yaml_lines + meta_data_yaml_lines
+
+    return yaml_lines
+
+
+def convert_to_yaml(data, tag, record_type, depth):
+    tagged_object = {tag: data}
+    yaml_string = yaml.dump(tagged_object, indent=indent, sort_keys=True).rstrip('\n')
+
+    offset_string = ' ' * indent_size(record_type, depth)
     yaml_lines = []
-    for yaml_line in yaml_data.split("\n"):
+    for yaml_line in yaml_string.split("\n"):
         yaml_lines.append(f'{offset_string}{yaml_line}')
     return yaml_lines
 
 
 def format_re(record):
-    yaml_data = json_to_yaml(record['value'], "RE")
-    offset_string = ' ' * indent_size(record)
-    yaml_lines = []
-    for yaml_line in yaml_data.split("\n"):
-        yaml_lines.append(f'{offset_string}{yaml_line}')
+    json_string = record['value']
+    data_hashed = preprocessor.hash_update(json_string)
+    raw_data, meta_data = metadata_strip.strip_and_separate_metadata(data_hashed)
+
+    raw_data_yaml_lines = convert_to_yaml(raw_data, "RE", record['type'], record['depth'])
+    meta_data_yaml_lines = convert_to_yaml(meta_data, "RI", record['type'], record['depth'])
+
+    yaml_lines = raw_data_yaml_lines + meta_data_yaml_lines
+
     return yaml_lines
 
 
-def json_to_yaml(json_string, tag):
-    json_data = preprocessor.hash_update(json_string)
-    sorted_data = sort_keys(json_data)
-    tag_object = {tag: sorted_data}
-    json_s = json.dumps(tag_object)
-    return yaml.dump(json.loads(json_s), indent=indent, sort_keys=False).rstrip('\n')
-
-
-def sort_keys(d):
-    if not isinstance(d, dict):
-        return d
-
-    keys_order = ['__type__', '__id__', '__array__']
-    other_keys = [k for k in d if k not in keys_order]
-    sorted_keys = keys_order + other_keys
-    return {k: sort_keys(d[k]) for k in sorted_keys}
-
-
-def indent_size(record):
-    if record['type'] == 'MS':
-        return record['depth'] * (2 * indent)
+def indent_size(record_type, depth):
+    if record_type == 'MS':
+        return depth * (2 * indent)
     else:
-        return (record['depth'] + 1) * (2 * indent)
+        return (depth + 1) * (2 * indent)
 
 
 def open_file(filename, mode='r'):
@@ -153,4 +164,4 @@ def open_file(filename, mode='r'):
 
 
 if __name__ == '__main__':
-    process_session('D:\\temp\\SESSION-20240530_223454')
+    process_session('D:\\temp\\SESSION-20240531_215607')
