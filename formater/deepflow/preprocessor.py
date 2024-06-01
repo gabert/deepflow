@@ -52,7 +52,7 @@ def merge_json(hash_data, hash_meta):
             if isinstance(hash_data[key], (dict, list)):
                 hash_data[key] = merge_json(hash_data[key], hash_meta[key])
             elif key == '__hash__':
-                hash_data["__id__"] = f"ID:{hash_meta['__id__']}-{hash_data['__hash__']}-{hash_meta['__hash__']}"
+                hash_data["__id__"] = f"ID:{hash_meta['__id__']}-CH:{hash_data['__hash__']}-IH:{hash_meta['__hash__']}"
                 hash_data["__type__"] = hash_meta['__type__']
                 del hash_data["__hash__"]
     elif isinstance(hash_data, list):

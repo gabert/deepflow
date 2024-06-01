@@ -34,17 +34,15 @@ def process_dump_file(dump_file_path, yaml_file_path):
 
 def process_dump_line(line, previous_level):
     record_formats = {
-        "MS": lambda record: format_ms(record, previous_level),
-        "TS": lambda record: format_ts(record, 'TS'),
-        "TE": lambda record: format_ts(record, 'TE'),
-        "AR": lambda record: format_ar(record),
-        "RE": lambda record: format_re(record)
+        "MS": lambda rec: format_ms(rec, previous_level),
+        "TS": lambda rec: format_ts(rec, 'TS'),
+        "TE": lambda rec: format_ts(rec, 'TE'),
+        "AR": lambda rec: format_ar(rec),
+        "RE": lambda rec: format_re(rec)
     }
 
     fields = split_line(line)
-    record_type = fields[2]
-    record = parse_fields_ts(fields) if record_type in ["MS", "ME"] else parse_fields(fields)
-
+    record = parse_fields(fields)
     yaml_entries = record_formats.get(record["type"], lambda _: [])(record)
 
     return yaml_entries, record['depth']
@@ -69,13 +67,13 @@ def parse_fields(fields):
     }
 
 
-def parse_fields_ts(fields):
-    return {
-        "depth": int(fields[0]),
-        "thread": fields[1],
-        "type": fields[2],
-        "value": fields[3]
-    }
+# def parse_fields_ts(fields):
+#     return {
+#         "depth": int(fields[0]),
+#         "thread": fields[1],
+#         "type": fields[2],
+#         "value": fields[3]
+#     }
 
 
 def format_ms(record, previous_level):
