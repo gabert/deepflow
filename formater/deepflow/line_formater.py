@@ -14,7 +14,7 @@ class YamlLineFormater(BaseFormater):
         self.indent = 4
         self.previous_level = -1
         self.record_formats = {
-            "MS": lambda record: self.format_ms(record, self.previous_level),
+            "MS": lambda record: self.__format_ms(record, self.previous_level),
             # "TS": lambda record: format_ts(record, 'TS'),
             # "TE": lambda record: format_ts(record, 'TE'),
             # "AR": lambda record: format_ar(record),
@@ -25,10 +25,10 @@ class YamlLineFormater(BaseFormater):
         yaml_lines = self.record_formats.get(record["type"], lambda _: [])(record)
         return yaml_lines
 
-    def format_ms(self, record, previous_level):
+    def __format_ms(self, record, previous_level):
         data = record['value']
 
-        indent_size = self.calculate_indent(record['type'], record['depth'])
+        indent_size = self.__calculate_indent(record['type'], record['depth'])
         indent_string = ' ' * indent_size
         method_indent_string = (' ' * self.indent).replace(' ', '-', 1)
 
@@ -41,7 +41,7 @@ class YamlLineFormater(BaseFormater):
 
         return yaml_lines
 
-    def calculate_indent(self, record_type, depth):
+    def __calculate_indent(self, record_type, depth):
         if record_type == 'MS':
             return depth * (2 * self.indent)
         else:
