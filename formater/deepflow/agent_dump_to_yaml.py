@@ -154,4 +154,4 @@ def open_file(filename, mode='r'):
 
 
 if __name__ == '__main__':
-    process_session('D:\\temp\\SESSION-20240531_223246')
+    process_session('D:\\temp\\SESSION-20240601_150303')
