@@ -1,4 +1,3 @@
-import json
 import yaml
 import os
 
@@ -12,18 +11,22 @@ def process_session(directory):
     for filename in os.listdir(directory):
         if filename.endswith('.dmp'):
             dump_file_path = os.path.join(directory, filename)
-            yaml_file_path = f'{filename}.yaml'
+            base_name = os.path.splitext(filename)[0]
+            # base_name = os.path.splitext(dump_file_path)[0]
+            yaml_file_path = f'{base_name}.yaml'
             process_dump_file(dump_file_path, yaml_file_path)
 
 
 def process_dump_file(dump_file_path, yaml_file_path):
-    yaml_file = open_file(yaml_file_path, 'w')
+    yaml_file = open_file(yaml_file_path, 'a')
     dump_file = open_file(dump_file_path)
 
     previous_level = -1
+
     for dump_line in dump_file:
-        yaml_entry, previous_level = process_dump_line(dump_line.rstrip('\n'), previous_level)
-        dump_to_yaml(yaml_entry, yaml_file)
+        yaml_entries, previous_level = process_dump_line(dump_line.rstrip('\n'), previous_level)
+        for entry in yaml_entries:
+            yaml_file.write(f'{entry}\n')
 
     dump_file.close()
     yaml_file.close()
@@ -45,11 +48,6 @@ def process_dump_line(line, previous_level):
     yaml_entries = record_formats.get(record["type"], lambda _: [])(record)
 
     return yaml_entries, record['depth']
-
-
-def dump_to_yaml(yaml_entries, yaml_file):
-    for entry in yaml_entries:
-        yaml_file.write(f'{entry}\n')
 
 
 def split_line(line):

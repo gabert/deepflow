@@ -70,7 +70,6 @@ def hash_update(json_str):
     json_hash_meta = compute_hash(copy.deepcopy(json_meta))
 
     json_data_merged = merge_json(copy.deepcopy(json_hash_data), copy.deepcopy(json_hash_meta))
-    print(json.dumps(json_data_merged))
 
     return json_data_merged
 
