@@ -8,6 +8,8 @@ import com.google.gson.GsonBuilder;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -42,19 +44,22 @@ public class DeepFlowAdvice {
     }
 
     @Advice.OnMethodEnter
-    public static void onEnter(@Advice.Origin String method,
+    public static void onEnter(@Advice.Origin Method method,
                                @Advice.AllArguments Object[] allArguments) {
 
 //        if ( ! Trigger.shouldExecuteOnEnter(CONFIG.getTriggerOn(), method) ) {
 //            return;
 //        }
+
         LocalTime ts = LocalTime.now();
 
         String data = Stream.of(allArguments).
                 map(GSON_DATA::toJson).
                 collect(Collectors.joining(", "));
 
-        sentToDestination("MS" + DELIMITER + method);
+        String methodSignature = transformMethodSignature(method);
+
+        sentToDestination("MS" + DELIMITER + methodSignature);
         sentToDestination("TS" + DELIMITER + ts);
         sentToDestination("AR" + DELIMITER +  "[" + data + "]");
 
@@ -62,7 +67,7 @@ public class DeepFlowAdvice {
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class)
-    public static void onExit(@Advice.Origin String method,
+    public static void onExit(@Advice.Origin Method method,
                               @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returned,
                               @Advice.Thrown Throwable throwable) {
 
@@ -76,14 +81,37 @@ public class DeepFlowAdvice {
             String exceptionString = GSON_EXCEPTION.toJson(new ExceptionInfo(throwable));
             sentToDestination("EX" + DELIMITER + exceptionString);
         } else {
-//            List<Object> values = returned == null ? Collections.EMPTY_LIST : List.of(returned);
-//            sentToDestination("RE" + DELIMITER + GSON_DATA.toJson(values));
             sentToDestination("RE" + DELIMITER + GSON_DATA.toJson(returned));
         }
 
         LocalTime ts = LocalTime.now();
+
+        String methodSignature = transformMethodSignature(method);
+
         sentToDestination("TE" + DELIMITER + ts);
-        sentToDestination("ME" + DELIMITER + method);
+        sentToDestination("ME" + DELIMITER + methodSignature);
+    }
+
+    public static String transformMethodSignature(Method method) {
+        String methodName = method.getName();
+        Class<?> declaringClass = method.getDeclaringClass();
+        Class<?> returnType = method.getReturnType();
+        String modifiers = Modifier.toString(method.getModifiers());
+
+        String argumentTypes = Arrays.stream(method.getParameterTypes())
+                .map(DeepFlowAdvice::formatClassName)
+                .collect(Collectors.joining(", "));
+
+        return String.format("%s.%s(%s) -> %s [%s]",
+                formatClassName(declaringClass),
+                methodName,
+                argumentTypes,
+                formatClassName(returnType),
+                modifiers);
+    }
+
+    public static String formatClassName(Class<?> clazz) {
+        return clazz.getPackageName() + "::" + clazz.getSimpleName();
     }
 
     public static void incrementCounter() {
