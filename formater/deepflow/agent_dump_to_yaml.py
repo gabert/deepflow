@@ -17,18 +17,15 @@ def process_session(directory):
 
 
 def process_dump_file(dump_file_path, yaml_file_path):
-    dump_file = open_file(dump_file_path)
-    yaml_file = open_file(yaml_file_path, 'w')
+    with (open(dump_file_path, 'r') as dump_file,
+          open(yaml_file_path, 'w') as yaml_file):
 
-    base_formater = FormaterFactory.get_formater('yaml')
+        base_formater = FormaterFactory.get_formater('yaml')
 
-    for dump_line in dump_file:
-        yaml_entries = process_dump_line(dump_line.rstrip('\n'), base_formater)
-        for entry in yaml_entries:
-            yaml_file.write(f'{entry}\n')
-
-    dump_file.close()
-    yaml_file.close()
+        for dump_line in dump_file:
+            yaml_entries = process_dump_line(dump_line.rstrip('\n'), base_formater)
+            for entry in yaml_entries:
+                yaml_file.write(f'{entry}\n')
 
 
 def process_dump_line(line, base_formater):
@@ -61,11 +58,6 @@ def compute_hash(record):
     record['meta_data'] = metadata_strip.extract_metadata(data_hashed)
 
     return record
-
-
-def open_file(filename, mode='r'):
-    file = open(filename, mode)
-    return file
 
 
 if __name__ == '__main__':
