@@ -17,8 +17,8 @@ def process_session(directory):
 
 
 def process_dump_file(dump_file_path, yaml_file_path):
-    yaml_file = open_file(yaml_file_path, 'w')
     dump_file = open_file(dump_file_path)
+    yaml_file = open_file(yaml_file_path, 'w')
 
     base_formater = FormaterFactory.get_formater('yaml')
 
@@ -44,22 +44,19 @@ def process_dump_line(line, base_formater):
 
 def parse_line(line):
     parts = line.split(delimiter)
-    depth = int(parts[0])
-    thread = parts[1]
-    record_type = parts[2]
-    value = ";".join(parts[3:])
 
     return {
-        "depth": depth,
-        "thread": thread,
-        "type": record_type,
-        "value": value
+        "depth": int(parts[0]),
+        "thread": parts[1],
+        "type": parts[2],
+        "value": ";".join(parts[3:])
     }
 
 
 def compute_hash(record):
     json_string = record['value']
     data_hashed = preprocessor.hash_update(json_string)
+
     record['raw_data'] = metadata_strip.extract_data(data_hashed)
     record['meta_data'] = metadata_strip.extract_metadata(data_hashed)
 
@@ -67,12 +64,8 @@ def compute_hash(record):
 
 
 def open_file(filename, mode='r'):
-    try:
-        file = open(filename, mode)
-        return file
-    except IOError:
-        print("Error: Unable to open file.")
-        return None
+    file = open(filename, mode)
+    return file
 
 
 if __name__ == '__main__':
