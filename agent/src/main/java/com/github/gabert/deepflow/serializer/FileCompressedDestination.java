@@ -19,6 +19,8 @@ import java.util.zip.Deflater;
  */
 public class FileCompressedDestination implements Destination {
     private final Map<String, Path> dumpPaths = new HashMap<>();
+    private final Map<String, Integer> counters = new HashMap<>();
+    private final Map<String, StringBuilder> buffers = new HashMap<>();
     private final String dumpFileName;
 
     public FileCompressedDestination(AgentConfig config, String sessionId) {
