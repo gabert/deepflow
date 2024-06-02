@@ -11,6 +11,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.Deflater;
 
+/**
+ * Based on liner length the FileCompressedDestination class reduces file size by cca 40%
+ */
 public class FileCompressedDestination implements Destination {
     private final Map<String, Path> dumpPaths = new HashMap<>();
     private final String dumpLocation;
