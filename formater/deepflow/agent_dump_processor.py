@@ -1,4 +1,5 @@
 import os
+import gzip
 
 from deepflow import hasher, metadata_strip
 from deepflow.line_formater import FormaterFactory
@@ -13,19 +14,23 @@ def process_session(directory):
             base_name = os.path.splitext(filename)[0]
             # base_name = os.path.splitext(dump_file_path)[0]
             yaml_file_path = f'{base_name}.yaml'
-            process_dump_file(dump_file_path, yaml_file_path)
+            process_dump_file(dump_file_path, yaml_file_path, compress=True)
 
 
-def process_dump_file(dump_file_path, yaml_file_path):
-    with (open(dump_file_path, 'r') as dump_file,
-          open(yaml_file_path, 'w') as yaml_file):
+def process_dump_file(dump_file_path, yaml_file_path, compress=False):
+    with open(dump_file_path, 'r') as dump_file:
+        if compress:
+            yaml_file_path = f'{yaml_file_path}.gz'
+            yaml_file = gzip.open(yaml_file_path, 'at', compresslevel=9)
+        else:
+            yaml_file = open(yaml_file_path, 'w')
 
-        base_formater = FormaterFactory.get_formater('yaml')
-
-        for dump_line in dump_file:
-            yaml_entries = process_dump_line(dump_line.rstrip('\n'), base_formater)
-            for entry in yaml_entries:
-                yaml_file.write(f'{entry}\n')
+        with yaml_file:
+            base_formater = FormaterFactory.get_formater('yaml')
+            for dump_line in dump_file:
+                yaml_entries = process_dump_line(dump_line.rstrip('\n'), base_formater)
+                for entry in yaml_entries:
+                    yaml_file.write(f'{entry}\n')
 
 
 def process_dump_line(line, base_formater):
