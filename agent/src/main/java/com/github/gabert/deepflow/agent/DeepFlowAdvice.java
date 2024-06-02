@@ -1,6 +1,7 @@
 package com.github.gabert.deepflow.agent;
 
 import com.github.gabert.deepflow.serializer.Destination;
+import com.github.gabert.deepflow.serializer.FileCompressedDestination;
 import com.github.gabert.deepflow.serializer.FileDestination;
 import com.github.gabert.deepflow.serializer.MetaIdTypeAdapterFactory;
 import com.google.gson.Gson;
@@ -35,6 +36,7 @@ public class DeepFlowAdvice {
     public static void setup(AgentConfig agentConfig) {
         CONFIG = agentConfig;
         DESTINATION = new FileDestination(agentConfig, generateSessionId());
+//        DESTINATION = new FileCompressedDestination(agentConfig, generateSessionId());
     }
 
     public static String generateSessionId() {
@@ -59,9 +61,12 @@ public class DeepFlowAdvice {
 
         String methodSignature = transformMethodSignature(method);
 
-        sentToDestination("MS" + DELIMITER + methodSignature);
-        sentToDestination("TS" + DELIMITER + ts);
-        sentToDestination("AR" + DELIMITER +  "[" + data + "]");
+        StringBuilder buffer = new StringBuilder();
+        buffer.append(enhanceLine("MS" + DELIMITER + methodSignature));
+        buffer.append(enhanceLine("TS" + DELIMITER + ts));
+        buffer.append(enhanceLine("AR" + DELIMITER +  "[" + data + "]"));
+
+        sentToDestination(buffer.toString());
 
         incrementCounter();
     }
@@ -77,19 +82,23 @@ public class DeepFlowAdvice {
 
         decrementCounter();
 
+        StringBuilder buffer = new StringBuilder();
+
         if (throwable != null) {
             String exceptionString = GSON_EXCEPTION.toJson(new ExceptionInfo(throwable));
-            sentToDestination("EX" + DELIMITER + exceptionString);
+            buffer.append(enhanceLine("EX" + DELIMITER + exceptionString));
         } else {
-            sentToDestination("RE" + DELIMITER + GSON_DATA.toJson(returned));
+            buffer.append(enhanceLine("RE" + DELIMITER + GSON_DATA.toJson(returned)));
         }
 
         LocalTime ts = LocalTime.now();
 
         String methodSignature = transformMethodSignature(method);
 
-        sentToDestination("TE" + DELIMITER + ts);
-        sentToDestination("ME" + DELIMITER + methodSignature);
+        buffer.append(enhanceLine("TE" + DELIMITER + ts));
+        buffer.append(enhanceLine("ME" + DELIMITER + methodSignature));
+
+        sentToDestination(buffer.toString());
     }
 
     public static String transformMethodSignature(Method method) {
@@ -134,13 +143,16 @@ public class DeepFlowAdvice {
         DEPTH.compute(threadName, (k, v) -> (v == null) ? 0 : v - 1);
     }
 
-    public static void sentToDestination(String data) {
+    public static String enhanceLine(String data) {
         String threadName = Thread.currentThread().getName();
         DEPTH.compute(threadName, (k, v) -> (v == null) ? 0 : v);
 
-        String line = DEPTH.get(threadName) + DELIMITER + threadName + DELIMITER + data + System.lineSeparator();
+        return DEPTH.get(threadName) + DELIMITER + threadName + DELIMITER + data + System.lineSeparator();
+    }
 
-        DESTINATION.send(line, threadName);
+    public static void sentToDestination(String data) {
+        String threadName = Thread.currentThread().getName();
+        DESTINATION.send(data, threadName);
     }
 
     public static class ExceptionInfo {
