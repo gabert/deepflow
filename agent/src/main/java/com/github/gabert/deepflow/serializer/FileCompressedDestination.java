@@ -2,6 +2,7 @@ package com.github.gabert.deepflow.serializer;
 
 import com.github.gabert.deepflow.agent.AgentConfig;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,17 +12,18 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.Deflater;
 
-/**
- * Based on liner length the FileCompressedDestination class reduces file size by cca 40%
+/*
+ * Based on the line length the FileCompressedDestination class reduces file size by cca 40%
+ * Buffering lines can enhance the compression ratio even more. Buffering needs to be implemented per thread.
+ * Shutdown hook must force to empty buffer for all threads buffer
  */
 public class FileCompressedDestination implements Destination {
     private final Map<String, Path> dumpPaths = new HashMap<>();
-    private final String dumpLocation;
     private final String dumpFileName;
 
     public FileCompressedDestination(AgentConfig config, String sessionId) {
-        this.dumpLocation = Paths.get(config.getDumpLocation(), "SESSION-" + sessionId).toString();
-        this.dumpFileName = Paths.get(this.dumpLocation,sessionId + "-{THREAD_NAME}.dmp").toString();
+        String dumpLocation = Paths.get(config.getDumpLocation(), "SESSION-" + sessionId).toString();
+        this.dumpFileName = Paths.get(dumpLocation,sessionId + "-{THREAD_NAME}.dfb").toString();
 
         try {
             ensurePath(dumpLocation);
@@ -32,14 +34,11 @@ public class FileCompressedDestination implements Destination {
 
     @Override
     public void send(String lines, String threadName) {
-
         Path filePath = dumpPaths.compute(threadName, (k, v) -> (v == null)
                 ? Paths.get(dumpFileName.replace("{THREAD_NAME}", threadName))
                 : v);
         try {
-            Files.write(filePath, compress(lines),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND);
+            writeCompressedEntry(lines, filePath);
         } catch (IOException e) {
             System.out.println(" --------------- START: AGENT FILE DESTINATION ERROR ---------------");
             e.printStackTrace();
@@ -54,18 +53,43 @@ public class FileCompressedDestination implements Destination {
         }
     }
 
-    private static byte[] compress(String line) {
+    private static byte[] compress(String line) throws IOException {
         byte[] data = line.getBytes();
-        Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
+        Deflater deflater = new Deflater();
         deflater.setInput(data);
         deflater.finish();
 
         byte[] buffer = new byte[1024];
-        int count = deflater.deflate(buffer);
-        deflater.end();
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream(data.length)) {
+            while (!deflater.finished()) {
+                int count = deflater.deflate(buffer);
+                outputStream.write(buffer, 0, count);
+            }
+            return outputStream.toByteArray();
+        } finally {
+            deflater.end();
+        }
+    }
 
-        byte[] output = new byte[count];
-        System.arraycopy(buffer, 0, output, 0, count);
-        return output;
+    private static void writeCompressedEntry(String entry, Path filePath) throws IOException {
+        byte[] compressedData = compress(entry);
+        byte[] lengthBytes = intToBytes(compressedData.length);
+
+        Files.write(filePath, lengthBytes,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND);
+
+        Files.write(filePath, compressedData,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND);
+    }
+
+    private static byte[] intToBytes(int value) {
+        return new byte[] {
+                (byte) (value >> 24),
+                (byte) (value >> 16),
+                (byte) (value >> 8),
+                (byte) value
+        };
     }
 }

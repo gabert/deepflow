@@ -17,7 +17,7 @@ public class FileDestination implements Destination {
 
     public FileDestination (AgentConfig config, String sessionId) {
         this.dumpLocation = Paths.get(config.getDumpLocation(), "SESSION-" + sessionId).toString();
-        this.dumpFileName = Paths.get(this.dumpLocation,sessionId + "-{THREAD_NAME}.dmp").toString();
+        this.dumpFileName = Paths.get(this.dumpLocation,sessionId + "-{THREAD_NAME}.dft").toString();
 
         try {
             ensurePath(dumpLocation);

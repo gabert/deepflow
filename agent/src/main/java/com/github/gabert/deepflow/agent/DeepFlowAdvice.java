@@ -35,13 +35,13 @@ public class DeepFlowAdvice {
 
     public static void setup(AgentConfig agentConfig) {
         CONFIG = agentConfig;
-        DESTINATION = new FileDestination(agentConfig, generateSessionId());
-//        DESTINATION = new FileCompressedDestination(agentConfig, generateSessionId());
+//        DESTINATION = new FileDestination(agentConfig, generateSessionId());
+        DESTINATION = new FileCompressedDestination(agentConfig, generateSessionId());
     }
 
     public static String generateSessionId() {
         LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
         return now.format(formatter);
     }
 
