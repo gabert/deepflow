@@ -1,6 +1,6 @@
 import os
 
-from deepflow import preprocessor, metadata_strip
+from deepflow import hasher, metadata_strip
 from deepflow.line_formater import FormaterFactory
 
 delimiter = ";"
@@ -52,7 +52,7 @@ def parse_line(line):
 
 def compute_hash(record):
     json_string = record['value']
-    data_hashed = preprocessor.hash_update(json_string)
+    data_hashed = hasher.hash_update(json_string)
 
     record['raw_data'] = metadata_strip.extract_data(data_hashed)
     record['meta_data'] = metadata_strip.extract_metadata(data_hashed)

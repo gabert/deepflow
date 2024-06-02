@@ -1,6 +1,6 @@
 import unittest
 
-from deepflow.preprocessor import compute_hash, hash_update
+from deepflow.hasher import compute_hash, hash_update
 
 json_test_string = '''
 {
