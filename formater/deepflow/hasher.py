@@ -1,7 +1,6 @@
 import json
 import hashlib
 import copy
-from collections import OrderedDict
 
 
 def compute_hash(obj):
