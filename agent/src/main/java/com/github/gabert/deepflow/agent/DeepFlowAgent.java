@@ -38,8 +38,11 @@ public class DeepFlowAgent {
             matcherExclude = matcherExclude.or(ElementMatchers.nameMatches(regex));
         }
 
+        ElementMatcher.Junction<TypeDescription> matcherAgentPackage = ElementMatchers.nameStartsWith("com.github.gabert.deepflow.serializer");
+
         new AgentBuilder.Default()
-                .type(matcherInclude.and(ElementMatchers.not(matcherExclude)))
+//                .type(matcherInclude.and(ElementMatchers.not(matcherExclude)))
+                .type(matcherInclude.and(ElementMatchers.not(matcherExclude)).and(ElementMatchers.not(matcherAgentPackage)))
                 .transform((DynamicType.Builder<?> builder,
                             TypeDescription type,
                             ClassLoader loader,

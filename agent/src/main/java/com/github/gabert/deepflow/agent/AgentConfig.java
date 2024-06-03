@@ -10,6 +10,8 @@ public class AgentConfig {
     private final List<String> matchersExclude = new ArrayList<>();
     private final String triggerOn;
 
+    private final Boolean compressFileOutput;
+
     private AgentConfig(Map<String, String> configMap) {
         this.dumpLocation = configMap.get("session_dump_location");
 
@@ -24,6 +26,9 @@ public class AgentConfig {
                 .toList());
 
         this.triggerOn = configMap.getOrDefault("trigger_on", null);
+
+        String compressFileOutput = configMap.getOrDefault("compress_file_output", "true");
+        this.compressFileOutput = Boolean.valueOf(compressFileOutput);
     }
 
     public String getDumpLocation() {
@@ -40,6 +45,10 @@ public class AgentConfig {
 
     public String getTriggerOn() {
         return triggerOn;
+    }
+
+    public Boolean getCompressFileOutput() {
+        return compressFileOutput;
     }
 
     public static AgentConfig getInstance(String agentArgs) throws IOException {

@@ -7,17 +7,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class FileDestination implements Destination {
-    private final Map<String, Path> dumpPaths = new HashMap<>();
-    private final String dumpLocation;
-    private final String dumpFileName;
+    private final Map<String, Path> dumpPaths = new ConcurrentHashMap<>();
+    private final String DUMP_FILE_PATTERN;
 
     public FileDestination (AgentConfig config, String sessionId) {
-        this.dumpLocation = Paths.get(config.getDumpLocation(), "SESSION-" + sessionId).toString();
-        this.dumpFileName = Paths.get(this.dumpLocation,sessionId + "-{THREAD_NAME}.dft").toString();
+        String dumpLocation = Paths.get(config.getDumpLocation(), "SESSION-" + sessionId).toString();
+        this.DUMP_FILE_PATTERN = Paths.get(dumpLocation,sessionId + "-{THREAD_NAME}.dft").toString();
 
         try {
             ensurePath(dumpLocation);
@@ -27,19 +26,17 @@ public class FileDestination implements Destination {
     }
 
     @Override
-    public void send(String line, String threadName) {
+    public void send(String line, String threadName) throws IOException {
+        System.out.println("[> " + line + " <]");
+
+
         Path filePath = dumpPaths.compute(threadName, (k, v) -> (v == null)
-                ? Paths.get(dumpFileName.replace("{THREAD_NAME}", threadName))
+                ? Paths.get(DUMP_FILE_PATTERN.replace("{THREAD_NAME}", threadName))
                 : v);
-        try {
-            Files.write(filePath, line.getBytes(),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND);
-        } catch (IOException e) {
-            System.out.println(" --------------- START: AGENT FILE DESTINATION ERROR ---------------");
-            e.printStackTrace();
-            System.out.println(" ---------------  END: AGENT FILE DESTINATION ERROR  ---------------");
-        }
+
+        Files.write(filePath, line.getBytes(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND);
     }
 
     private static void ensurePath(String directoryPath) throws IOException {

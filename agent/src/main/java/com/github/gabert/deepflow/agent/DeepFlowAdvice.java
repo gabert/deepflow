@@ -15,12 +15,13 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DeepFlowAdvice {
     public static AgentConfig CONFIG;
-    public final static Map<String, Integer> DEPTH = new HashMap<>();
+    public final static Map<String, Integer> DEPTH = new ConcurrentHashMap<>();
     public final static Gson GSON_DATA;
     public static final Gson GSON_EXCEPTION;
     public final static String DELIMITER = ";";
@@ -35,8 +36,8 @@ public class DeepFlowAdvice {
 
     public static void setup(AgentConfig agentConfig) {
         CONFIG = agentConfig;
-//        DESTINATION = new FileDestination(agentConfig, generateSessionId());
-        DESTINATION = new FileCompressedDestination(agentConfig, generateSessionId());
+        DESTINATION = agentConfig.getCompressFileOutput() ? new FileCompressedDestination(agentConfig, generateSessionId())
+                                                          : new FileDestination(agentConfig, generateSessionId())  ;
     }
 
     public static String generateSessionId() {
@@ -152,7 +153,13 @@ public class DeepFlowAdvice {
 
     public static void sentToDestination(String data) {
         String threadName = Thread.currentThread().getName();
-        DESTINATION.send(data, threadName);
+
+        try {
+            DESTINATION.send(data, threadName);
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
     }
 
     public static class ExceptionInfo {
