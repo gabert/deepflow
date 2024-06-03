@@ -13,7 +13,6 @@ def process_session(directory, destination_format='yaml', compress=True):
             continue
 
         dump_file_path = os.path.join(directory, filename)
-        # base_name = os.path.splitext(filename)[0]
         base_name = os.path.splitext(dump_file_path)[0]
         dst_file_path = f'{base_name}.{destination_format}'
 
