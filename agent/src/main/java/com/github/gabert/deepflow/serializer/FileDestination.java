@@ -27,9 +27,6 @@ public class FileDestination implements Destination {
 
     @Override
     public void send(String line, String threadName) throws IOException {
-        System.out.println("[> " + line + " <]");
-
-
         Path filePath = dumpPaths.compute(threadName, (k, v) -> (v == null)
                 ? Paths.get(DUMP_FILE_PATTERN.replace("{THREAD_NAME}", threadName))
                 : v);
