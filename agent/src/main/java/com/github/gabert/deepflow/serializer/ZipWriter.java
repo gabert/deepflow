@@ -26,7 +26,7 @@ public class ZipWriter implements Closeable {
         this.zipOutputStream = new ZipOutputStream(new BufferedOutputStream(fos));
         this.zipOutputStream.setLevel(Deflater.DEFLATED);
         this.zipOutputStream.putNextEntry(new ZipEntry(zipEntryName));
-        this.writer = new BufferedWriter(new OutputStreamWriter(zipOutputStream));
+        this.writer = new BufferedWriter(new OutputStreamWriter(zipOutputStream, StandardCharsets.UTF_8));
 
         Runtime.getRuntime().addShutdownHook(new Thread(this::close));
     }
@@ -38,7 +38,6 @@ public class ZipWriter implements Closeable {
 
         try {
             this.writer.write(line);
-            this.writer.newLine();
             // TODO: Consider flushing periodicity
             this.writer.flush();
         } catch (IOException e) {

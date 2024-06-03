@@ -124,14 +124,11 @@ public class DeepFlowAdvice {
         String fullClassName = clazz.getName();
         int lastDotIndex = fullClassName.lastIndexOf('.');
 
-        // Replace the last occurrence of '.' with '::'
         if (lastDotIndex != -1) {
             fullClassName = fullClassName.substring(0, lastDotIndex) + "::" + fullClassName.substring(lastDotIndex + 1);
         }
 
         return fullClassName;
-
-//        return clazz.getPackageName() + "::" + clazz.getSimpleName();
     }
 
     public static void incrementCounter() {
