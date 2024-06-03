@@ -25,41 +25,56 @@ def process_session(directory, destination_format='yaml', compress=True):
 def process_dump_txt_file(dump_file_path, destination_format, dst_file_path, compress):
     with open(dump_file_path, 'r') as dump_source:
         dst_file = open_destination_file(dst_file_path, compress)
-
         with dst_file:
             base_formater = FormaterFactory.get_formater(destination_format)
 
             if compress:
                 output_file_name = os.path.basename(dst_file_path)
                 with dst_file.open(output_file_name, 'w') as output_file:
-                    process_dump_data(dump_source, output_file, base_formater, decode=False, encode=True)
+                    process_dump_data(dump_source,
+                                      output_file,
+                                      base_formater,
+                                      compress,
+                                      dump_file_path.endswith('.dfz'))
             else:
-                process_dump_data(dump_source, dst_file, base_formater, decode=False, encode=False)
+                process_dump_data(dump_source,
+                                  dst_file,
+                                  base_formater,
+                                  compress,
+                                  dump_file_path.endswith('.dfz'))
 
 
 def process_dump_bin_file(dump_file_path, destination_format, dst_file_path, compress):
     with zipfile.ZipFile(dump_file_path, 'r') as input_zip:
         with input_zip.open(input_zip.namelist()[0]) as dump_source:
-
             dst_file = open_destination_file(dst_file_path, compress)
-
             with dst_file:
                 base_formater = FormaterFactory.get_formater(destination_format)
 
                 if compress:
-                    output_file_name = input_zip.namelist()[0].replace(".dft", f'.{destination_format}')
+                    output_file_name = input_zip.namelist()[0].replace(".dft",
+                                                                       f'.{destination_format}')
                     with dst_file.open(output_file_name, 'w') as output_file:
-                        process_dump_data(dump_source, output_file, base_formater, decode=True, encode=True)
+                        process_dump_data(dump_source,
+                                          output_file,
+                                          base_formater,
+                                          compress,
+                                          dump_file_path.endswith('.dfz'))
                 else:
-                    process_dump_data(dump_source, dst_file, base_formater, decode=True, encode=False)
+                    process_dump_data(dump_source,
+                                      dst_file,
+                                      base_formater,
+                                      compress,
+                                      dump_file_path.endswith('.dfz'))
 
 
-def process_dump_data(dump_source, output_file, base_formater, encode: bool, decode: bool):
+def process_dump_data(dump_source, output_file, base_formater, compress: bool, decode: bool):
     for dump_line in dump_source:
         line = dump_line.decode('utf-8') if decode else dump_line
-        entries = process_dump_line(line.rstrip('\n').rstrip('\r'), base_formater)
+        entries = process_dump_line(line.rstrip('\n').rstrip('\r'),
+                                    base_formater)
         for entry in entries:
-            entry = f'{entry}\n'.encode("utf-8") if encode else f'{entry}\n'
+            entry = f'{entry}\n'.encode("utf-8") if compress else f'{entry}\n'
             output_file.write(entry)
 
 
@@ -106,9 +121,9 @@ def compute_hash(record):
 
 
 if __name__ == '__main__':
-    # process_session('D:\\temp\\SESSION-20240603-214327',
-    #                 destination_format='yaml',
-    #                 compress=True)
-    process_session('D:\\temp\\SESSION-20240603-221554',
+    process_session('D:\\temp\\SESSION-20240603-214327',
                     destination_format='yaml',
-                    compress=True)
+                    compress=False)
+    # process_session('D:\\temp\\SESSION-20240603-221554',
+    #                 destination_format='yaml',
+    #                 compress=False)
