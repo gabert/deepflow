@@ -1,6 +1,5 @@
 import os
-import gzip
-import zlib
+import zipfile
 
 from deepflow import hasher, metadata_strip
 from deepflow.line_formater import FormaterFactory
@@ -10,17 +9,17 @@ delimiter = ";"
 
 def process_session(directory, destination_format='yaml', compress=True):
     for filename in os.listdir(directory):
-        if not filename.endswith('.dft') and not filename.endswith('.dfb'):
+        if not filename.endswith('.dft') and not filename.endswith('.dfz'):
             continue
 
         dump_file_path = os.path.join(directory, filename)
-        base_name = os.path.splitext(filename)[0]
-        # base_name = os.path.splitext(dump_file_path)[0]
+        # base_name = os.path.splitext(filename)[0]
+        base_name = os.path.splitext(dump_file_path)[0]
         dst_file_path = f'{base_name}.{destination_format}'
 
         if filename.endswith('.dft'):
             process_dump_txt_file(dump_file_path, destination_format, dst_file_path, compress)
-        elif filename.endswith('.dfb'):
+        elif filename.endswith('.dfz'):
             process_dump_bin_file(dump_file_path, destination_format, dst_file_path, compress)
 
 
@@ -30,52 +29,49 @@ def process_dump_txt_file(dump_file_path, destination_format, dst_file_path, com
 
         with dst_file:
             base_formater = FormaterFactory.get_formater(destination_format)
-            dump_entries(dump_source, dst_file, base_formater)
+
+            if compress:
+                output_file_name = os.path.basename(dst_file_path)
+                with dst_file.open(output_file_name, 'w') as output_file:
+                    process_dump_data(dump_source, output_file, base_formater, decode=False, encode=True)
+            else:
+                process_dump_data(dump_source, dst_file, base_formater, decode=False, encode=False)
 
 
 def process_dump_bin_file(dump_file_path, destination_format, dst_file_path, compress):
-    with open(dump_file_path, 'rb') as dump_file:
-        dst_file = open_destination_file(dst_file_path, compress)
+    with zipfile.ZipFile(dump_file_path, 'r') as input_zip:
+        with input_zip.open(input_zip.namelist()[0]) as dump_source:
 
-        with dst_file:
-            base_formater = FormaterFactory.get_formater(destination_format)
-            while True:
-                length_bytes = dump_file.read(4)
-                if not length_bytes:
-                    break
-                entry_length = int.from_bytes(length_bytes, byteorder='big')
-                compressed_data = dump_file.read(entry_length)
-                dump_lines = decompress_string(compressed_data)
+            dst_file = open_destination_file(dst_file_path, compress)
 
-                dump_entries(dump_lines.splitlines(), dst_file, base_formater)
+            with dst_file:
+                base_formater = FormaterFactory.get_formater(destination_format)
+
+                if compress:
+                    output_file_name = input_zip.namelist()[0].replace(".dft", f'.{destination_format}')
+                    with dst_file.open(output_file_name, 'w') as output_file:
+                        process_dump_data(dump_source, output_file, base_formater, decode=True, encode=True)
+                else:
+                    process_dump_data(dump_source, dst_file, base_formater, decode=True, encode=False)
+
+
+def process_dump_data(dump_source, output_file, base_formater, encode: bool, decode: bool):
+    for dump_line in dump_source:
+        line = dump_line.decode('utf-8') if decode else dump_line
+        entries = process_dump_line(line.rstrip('\n').rstrip('\r'), base_formater)
+        for entry in entries:
+            entry = f'{entry}\n'.encode("utf-8") if encode else f'{entry}\n'
+            output_file.write(entry)
 
 
 def open_destination_file(dst_file_path, compress):
     if compress:
-        dst_file_path = f'{dst_file_path}.gz'
-        dst_file = gzip.open(dst_file_path, 'at', compresslevel=9)
+        dst_file_path = f'{dst_file_path}.zip'
+        dst_file = zipfile.ZipFile(dst_file_path, 'w', compression=zipfile.ZIP_DEFLATED)
     else:
         dst_file = open(dst_file_path, 'w')
 
     return dst_file
-
-
-def dump_entries(dump_source, dst_file, base_formater):
-    for dump_line in dump_source:
-        entries = process_dump_line(dump_line.rstrip('\n').rstrip('\r'), base_formater)
-        for entry in entries:
-            dst_file.write(f'{entry}\n')
-
-
-def decompress_string(compressed_data):
-    try:
-        return zlib.decompress(compressed_data).decode('utf-8')
-    except zlib.error:
-        try:
-            return zlib.decompress(compressed_data, -zlib.MAX_WBITS).decode('utf-8')
-        except zlib.error as e:
-            print("Error decompressing data: ", e)
-            return None
 
 
 def process_dump_line(line, base_formater):
@@ -111,9 +107,9 @@ def compute_hash(record):
 
 
 if __name__ == '__main__':
-    process_session('D:\\temp\\SESSION-20240602_172908',
-                    destination_format='yaml',
-                    compress=False)
-    # process_session('D:\\temp\\SESSION-20240602_173153',
+    # process_session('D:\\temp\\SESSION-20240603-214327',
     #                 destination_format='yaml',
-    #                 compress=False)
+    #                 compress=True)
+    process_session('D:\\temp\\SESSION-20240603-221554',
+                    destination_format='yaml',
+                    compress=True)
