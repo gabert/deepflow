@@ -96,7 +96,7 @@ json_structure = {
 }
 
 if __name__ == '__main__':
-    json_string = '{"town":{"__type__":"java.lang.String","__id__":1320388319,"__value__":"London"},"__type__":"com.github.gabert.deepflow.demo.Main$Address","__id__":768185844}'
+    json_string = '{"town":"London","__type__":"com.github.gabert.deepflow.demo.Main$Address","__id__":768185844}'
 
     json_data = json.loads(json_string)
 

@@ -15,13 +15,11 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DeepFlowAdvice {
     public static AgentConfig CONFIG;
-    public final static Map<String, Integer> DEPTH = new ConcurrentHashMap<>();
     public final static Gson GSON_DATA;
     public static final Gson GSON_EXCEPTION;
     public final static String DELIMITER = ";";
@@ -50,10 +48,6 @@ public class DeepFlowAdvice {
     public static void onEnter(@Advice.Origin Method method,
                                @Advice.AllArguments Object[] allArguments) {
 
-//        if ( ! Trigger.shouldExecuteOnEnter(CONFIG.getTriggerOn(), method) ) {
-//            return;
-//        }
-
         LocalTime ts = LocalTime.now();
 
         String data = Stream.of(allArguments).
@@ -61,15 +55,13 @@ public class DeepFlowAdvice {
                 collect(Collectors.joining(", "));
 
         String methodSignature = transformMethodSignature(method);
+        StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
+        int callerLine = stackTraceElements.length >= 3 ? stackTraceElements[2].getLineNumber() : 0;
 
-        StringBuilder buffer = new StringBuilder();
-        buffer.append(enhanceLine("MS" + DELIMITER + methodSignature));
-        buffer.append(enhanceLine("TS" + DELIMITER + ts));
-        buffer.append(enhanceLine("AR" + DELIMITER +  "[" + data + "]"));
-
-        sentToDestination(buffer.toString());
-
-        incrementCounter();
+        sentToDestination(formatLine("MS", methodSignature));
+        sentToDestination(formatLine("TS", ts));
+        sentToDestination(formatLine("CL", callerLine));
+        sentToDestination(formatLine("AR", "[" + data + "]"));
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class)
@@ -77,29 +69,27 @@ public class DeepFlowAdvice {
                               @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returned,
                               @Advice.Thrown Throwable throwable) {
 
-//        if ( ! Trigger.shouldExecuteOnExit(CONFIG.getTriggerOn(), method) ) {
-//            return;
-//        }
-
-        decrementCounter();
-
-        StringBuilder buffer = new StringBuilder();
+        if (Void.TYPE.equals(method.getGenericReturnType())) {
+            sentToDestination(formatLine("RT", "VOID"));
+        } else if (throwable != null) {
+            sentToDestination(formatLine("RT" , "EXCEPTION"));
+        } else {
+            sentToDestination(formatLine("RT", "VALUE"));
+        }
 
         if (throwable != null) {
             String exceptionString = GSON_EXCEPTION.toJson(new ExceptionInfo(throwable));
-            buffer.append(enhanceLine("EX" + DELIMITER + exceptionString));
+            sentToDestination(formatLine("RE", exceptionString));
         } else {
-            buffer.append(enhanceLine("RE" + DELIMITER + GSON_DATA.toJson(returned)));
+            sentToDestination(formatLine("RE", GSON_DATA.toJson(returned)));
         }
 
         LocalTime ts = LocalTime.now();
 
         String methodSignature = transformMethodSignature(method);
 
-        buffer.append(enhanceLine("TE" + DELIMITER + ts));
-        buffer.append(enhanceLine("ME" + DELIMITER + methodSignature));
-
-        sentToDestination(buffer.toString());
+        sentToDestination(formatLine("TE", ts));
+        sentToDestination(formatLine("ME", methodSignature));
     }
 
     public static String transformMethodSignature(Method method) {
@@ -131,21 +121,8 @@ public class DeepFlowAdvice {
         return fullClassName;
     }
 
-    public static void incrementCounter() {
-        String threadName = Thread.currentThread().getName();
-        DEPTH.compute(threadName, (k, v) -> (v == null) ? 0 : v + 1);
-    }
-
-    public static void decrementCounter() {
-        String threadName = Thread.currentThread().getName();
-        DEPTH.compute(threadName, (k, v) -> (v == null) ? 0 : v - 1);
-    }
-
-    public static String enhanceLine(String data) {
-        String threadName = Thread.currentThread().getName();
-        DEPTH.compute(threadName, (k, v) -> (v == null) ? 0 : v);
-
-        return DEPTH.get(threadName) + DELIMITER + threadName + DELIMITER + data + System.lineSeparator();
+    public static String formatLine(String tag, Object data) {
+        return tag + DELIMITER + data.toString() + "\n";
     }
 
     public static void sentToDestination(String data) {

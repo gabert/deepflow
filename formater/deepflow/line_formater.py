@@ -9,6 +9,25 @@ class BaseFormater(ABC):
         pass
 
 
+class LlmLineFormater(BaseFormater):
+    def format(self, record):
+        entries = []
+
+        if record['type'] == 'MS':
+            entries.append(f"{record['method_id']};{record['depth']};{record['type']};{record['value']}")
+            entries.append(f"{record['method_id']};{record['depth']};PM;{record['parent_method_id']}")
+        elif record['type'] == 'AR':
+            entries.append(f"{record['method_id']};{record['depth']};AR;{record['raw_data']}")
+            entries.append(f"{record['method_id']};{record['depth']};AI;{record['meta_data']}")
+        elif record['type'] == 'RE':
+            entries.append(f"{record['method_id']};{record['depth']};RE;{record['raw_data']}")
+            entries.append(f"{record['method_id']};{record['depth']};RI;{record['meta_data']}")
+        else:
+            entries.append(f"{record['method_id']};{record['depth']};{record['type']};{record['value']}")
+
+        return entries
+
+
 class YamlLineFormater(BaseFormater):
     def __init__(self):
         self.indent = 4
@@ -18,7 +37,7 @@ class YamlLineFormater(BaseFormater):
             "TS": lambda record: self.__format_ts_te(record),
             "TE": lambda record: self.__format_ts_te(record),
             "AR": lambda record: self.__format_ar_re(record),
-            "RE": lambda record: self.__format_ar_re(record)
+            "RE": lambda record: self.__format_ar_re(record),
         }
 
     def format(self, record):
@@ -36,9 +55,12 @@ class YamlLineFormater(BaseFormater):
         yaml_lines = []
 
         if record['depth'] > self.previous_level:
-            yaml_lines.append(indent_string + 'CS:')
+            yaml_lines.append(f'{indent_string}CS: ')
 
         yaml_lines.append(f"{indent_string}{method_indent_string}'{data}':")
+
+        mi_indent = ' ' * self.__calculate_indent(record['type'], record['depth'] + 1)
+        yaml_lines.append(f"{mi_indent}MI: {record['method_id']}-{record['parent_method_id']}-{record['depth']}")
 
         return yaml_lines
 
@@ -69,6 +91,7 @@ class YamlLineFormater(BaseFormater):
 
         return yaml_lines
 
+
     def __convert_to_yaml(self, data, tag, record_type, depth):
         tagged_object = {tag: data}
         yaml_string = yaml.dump(tagged_object, indent=self.indent, sort_keys=True).rstrip('\n')
@@ -88,7 +111,8 @@ class YamlLineFormater(BaseFormater):
 
 class FormaterFactory:
     __formatters = {
-        'yaml': YamlLineFormater
+        'yaml': YamlLineFormater,
+        'llm': LlmLineFormater
     }
 
     @staticmethod
