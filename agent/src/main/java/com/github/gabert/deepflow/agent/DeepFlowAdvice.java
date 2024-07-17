@@ -50,7 +50,7 @@ public class DeepFlowAdvice {
 
         LocalTime ts = LocalTime.now();
 
-        String data = Stream.of(allArguments).
+        String argsData = Stream.of(allArguments).
                 map(GSON_DATA::toJson).
                 collect(Collectors.joining(", "));
 
@@ -61,13 +61,14 @@ public class DeepFlowAdvice {
         sentToDestination(formatLine("MS", methodSignature));
         sentToDestination(formatLine("TS", ts));
         sentToDestination(formatLine("CL", callerLine));
-        sentToDestination(formatLine("AR", "[" + data + "]"));
+        sentToDestination(formatLine("AR", "[" + argsData + "]"));
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class)
     public static void onExit(@Advice.Origin Method method,
                               @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returned,
-                              @Advice.Thrown Throwable throwable) {
+                              @Advice.Thrown Throwable throwable,
+                              @Advice.AllArguments Object[] allArguments) {
 
         if (Void.TYPE.equals(method.getGenericReturnType())) {
             sentToDestination(formatLine("RT", "VOID"));
