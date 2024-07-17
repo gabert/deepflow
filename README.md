@@ -21,8 +21,16 @@ Deepflow consists of two main components:
 
 ### Prerequisites
 
-- Java Development Kit (JDK) 8 or higher
+- Java Development Kit (JDK) 17. Java 11 should work as well. Not tested
 - Python 3.6 or higher
+
+### Project structure description
+
+The project is split into two parts:
+
+- Java agent: Responsible for collecting the data from the running java application
+- Formatter: Responsible for formating the collected raw data to format suitablemfor further analysis
+
 
 ### Installation
 
@@ -30,3 +38,17 @@ Deepflow consists of two main components:
    ```sh
    git clone https://github.com/gabert/deepflow.git
    cd deepflow
+   ```
+
+2. **Build Project**
+```sh
+cd agent
+mvn clean install
+```
+
+java -javaagent:d:\Pracovny\Projekty\Projects\flowspy\agent\target\are-agent-jar-with-dependencies.jar=config=D:\temp\deepagent.cfg   
+
+
+# ToDo:
+- write tutorial
+- write argument checking at the end of the call.

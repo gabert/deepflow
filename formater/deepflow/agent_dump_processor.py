@@ -141,9 +141,9 @@ def open_destination_file(dst_file_path, compress):
 
 
 if __name__ == '__main__':
-    process_session('D:\\temp\\SESSION-20240605-143537',
-                    destination_format='yaml',
-                    compress=False)
+    process_session('D:\\temp\\SESSION-20240717-210650',
+                    destination_format='llm',
+                    compress=True)
     # process_session('D:\\temp\\SESSION-20240603-221554',
     #                 destination_format='yaml',
     #                 compress=False)
