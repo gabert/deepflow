@@ -42,7 +42,8 @@ public class DeepFlowAgent {
 
         new AgentBuilder.Default()
 //                .type(matcherInclude.and(ElementMatchers.not(matcherExclude)))
-                .type(matcherInclude.and(ElementMatchers.not(matcherExclude)).and(ElementMatchers.not(matcherAgentPackage)))
+                .type(matcherInclude.and(ElementMatchers.not(matcherExclude))
+                                    .and(ElementMatchers.not(matcherAgentPackage)))
                 .transform((DynamicType.Builder<?> builder,
                             TypeDescription type,
                             ClassLoader loader,

@@ -91,7 +91,6 @@ class YamlLineFormater(BaseFormater):
 
         return yaml_lines
 
-
     def __convert_to_yaml(self, data, tag, record_type, depth):
         tagged_object = {tag: data}
         yaml_string = yaml.dump(tagged_object, indent=self.indent, sort_keys=True).rstrip('\n')

@@ -58,10 +58,10 @@ public class DeepFlowAdvice {
         StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
         int callerLine = stackTraceElements.length >= 3 ? stackTraceElements[2].getLineNumber() : 0;
 
-        sentToDestination(formatLine("MS", methodSignature));
-        sentToDestination(formatLine("TS", ts));
-        sentToDestination(formatLine("CL", callerLine));
-        sentToDestination(formatLine("AR", "[" + argsData + "]"));
+        sendToDestination(formatLine("MS", methodSignature));
+        sendToDestination(formatLine("TS", ts));
+        sendToDestination(formatLine("CL", callerLine));
+        sendToDestination(formatLine("AR", "[" + argsData + "]"));
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class)
@@ -71,26 +71,26 @@ public class DeepFlowAdvice {
                               @Advice.AllArguments Object[] allArguments) {
 
         if (Void.TYPE.equals(method.getGenericReturnType())) {
-            sentToDestination(formatLine("RT", "VOID"));
+            sendToDestination(formatLine("RT", "VOID"));
         } else if (throwable != null) {
-            sentToDestination(formatLine("RT" , "EXCEPTION"));
+            sendToDestination(formatLine("RT" , "EXCEPTION"));
         } else {
-            sentToDestination(formatLine("RT", "VALUE"));
+            sendToDestination(formatLine("RT", "VALUE"));
         }
 
         if (throwable != null) {
             String exceptionString = GSON_EXCEPTION.toJson(new ExceptionInfo(throwable));
-            sentToDestination(formatLine("RE", exceptionString));
+            sendToDestination(formatLine("RE", exceptionString));
         } else {
-            sentToDestination(formatLine("RE", GSON_DATA.toJson(returned)));
+            sendToDestination(formatLine("RE", GSON_DATA.toJson(returned)));
         }
 
         LocalTime ts = LocalTime.now();
 
         String methodSignature = transformMethodSignature(method);
 
-        sentToDestination(formatLine("TE", ts));
-        sentToDestination(formatLine("ME", methodSignature));
+        sendToDestination(formatLine("TE", ts));
+        sendToDestination(formatLine("ME", methodSignature));
     }
 
     public static String transformMethodSignature(Method method) {
@@ -126,7 +126,7 @@ public class DeepFlowAdvice {
         return tag + DELIMITER + data.toString() + "\n";
     }
 
-    public static void sentToDestination(String data) {
+    public static void sendToDestination(String data) {
         String threadName = Thread.currentThread().getName();
 
         try {
