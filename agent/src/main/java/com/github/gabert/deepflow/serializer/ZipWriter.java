@@ -2,15 +2,15 @@ package com.github.gabert.deepflow.serializer;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.zip.*;
+import java.nio.file.*;
+import java.util.zip.Deflater;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class ZipWriter implements Closeable {
     private final ZipOutputStream zipOutputStream;
     private final BufferedWriter writer;
-    private Boolean isClosed = Boolean.FALSE;
+    private volatile boolean isClosed = false;
 
     public ZipWriter(String zipEntryFile) throws IOException {
         Path zipEntryFilePath = Paths.get(zipEntryFile);
@@ -27,35 +27,38 @@ public class ZipWriter implements Closeable {
         this.zipOutputStream.setLevel(Deflater.DEFLATED);
         this.zipOutputStream.putNextEntry(new ZipEntry(zipEntryName));
         this.writer = new BufferedWriter(new OutputStreamWriter(zipOutputStream, StandardCharsets.UTF_8));
-
-        Runtime.getRuntime().addShutdownHook(new Thread(this::close));
     }
 
-    public void write(String line) throws IOException {
-        if (isClosed) {
-            throw new IOException("Zip file is already closed.");
-        }
-
-        try {
-            this.writer.write(line);
-            // TODO: Consider flushing periodicity
-            this.writer.flush();
-        } catch (IOException e) {
-            this.close();
-            throw e;
-        }
+    public synchronized void write(String line) throws IOException {
+        ensureOpen();
+        this.writer.write(line);
+        this.writer.flush();
     }
 
     @Override
-    public void close()  {
-        this.isClosed = Boolean.TRUE;
+    public synchronized void close() {
+        if (isClosed) {
+            return; // Already closed
+        }
+        isClosed = true;
 
         try {
-            writer.flush();
-            zipOutputStream.closeEntry();
-            writer.close();
+            writer.flush(); // Ensure all data is written
         } catch (IOException e) {
             e.printStackTrace();
+        }
+
+        try {
+            zipOutputStream.closeEntry();
+            writer.close(); // Closes underlying streams
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private synchronized void ensureOpen() throws IOException {
+        if (isClosed) {
+            throw new IOException("Zip file is already closed.");
         }
     }
 

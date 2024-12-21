@@ -1,8 +1,6 @@
 package com.github.gabert.deepflow.agent;
 
 import com.github.gabert.deepflow.serializer.Destination;
-import com.github.gabert.deepflow.serializer.FileCompressedDestination;
-import com.github.gabert.deepflow.serializer.FileDestination;
 import com.github.gabert.deepflow.serializer.MetaIdTypeAdapterFactory;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -11,9 +9,7 @@ import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -34,14 +30,7 @@ public class DeepFlowAdvice {
 
     public static void setup(AgentConfig agentConfig) {
         CONFIG = agentConfig;
-        DESTINATION = agentConfig.getCompressFileOutput() ? new FileCompressedDestination(agentConfig, generateSessionId())
-                                                          : new FileDestination(agentConfig, generateSessionId())  ;
-    }
-
-    public static String generateSessionId() {
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
-        return now.format(formatter);
+        DESTINATION = agentConfig.getDestination();
     }
 
     @Advice.OnMethodEnter
@@ -85,11 +74,11 @@ public class DeepFlowAdvice {
             sendToDestination(formatLine("RE", GSON_DATA.toJson(returned)));
         }
 
-        LocalTime ts = LocalTime.now();
+        LocalTime te = LocalTime.now();
 
         String methodSignature = transformMethodSignature(method);
 
-        sendToDestination(formatLine("TE", ts));
+        sendToDestination(formatLine("TE", te));
         sendToDestination(formatLine("ME", methodSignature));
     }
 

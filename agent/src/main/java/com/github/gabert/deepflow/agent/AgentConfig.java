@@ -1,6 +1,11 @@
 package com.github.gabert.deepflow.agent;
 
+import com.github.gabert.deepflow.serializer.Destination;
+import com.github.gabert.deepflow.serializer.DestinationType;
+
 import java.io.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 
@@ -10,7 +15,7 @@ public class AgentConfig {
     private final List<String> matchersExclude = new ArrayList<>();
     private final String triggerOn;
 
-    private final Boolean compressFileOutput;
+    private final Destination destination;
 
     private AgentConfig(Map<String, String> configMap) {
         this.dumpLocation = configMap.get("session_dump_location");
@@ -27,12 +32,9 @@ public class AgentConfig {
 
         this.triggerOn = configMap.getOrDefault("trigger_on", null);
 
-        String compressFileOutput = configMap.getOrDefault("compress_file_output", "true");
-        this.compressFileOutput = Boolean.valueOf(compressFileOutput);
-    }
-
-    public String getDumpLocation() {
-        return dumpLocation;
+        String sessionId = generateSessionId();
+        String destinationTypeConfig = configMap.get("destination").toUpperCase();
+        this.destination = DestinationType.valueOf(destinationTypeConfig).createDestination(configMap, sessionId);
     }
 
     public List<String> getMatchersInclude() {
@@ -43,12 +45,9 @@ public class AgentConfig {
         return matchersExclude;
     }
 
-    public String getTriggerOn() {
-        return triggerOn;
-    }
 
-    public Boolean getCompressFileOutput() {
-        return compressFileOutput;
+    public Destination getDestination() {
+        return destination;
     }
 
     public static AgentConfig getInstance(String agentArgs) throws IOException {
@@ -84,6 +83,12 @@ public class AgentConfig {
         }
 
         return configMapParams;
+    }
+
+    private static String generateSessionId() {
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+        return now.format(formatter);
     }
 
     private static Map<String, String> loadFromConfigFile(String filePath) throws IOException {
