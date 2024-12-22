@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.agent;
+package com.github.gabert.deepflow.serializer;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 

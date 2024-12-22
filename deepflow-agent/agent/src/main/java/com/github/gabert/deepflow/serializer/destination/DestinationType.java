@@ -16,6 +16,12 @@ public enum DestinationType {
             return new ZipDestination(configMap, sessionId);
         }
     },
+    KAFKA {
+        @Override
+        public Destination createDestination(Map<String, String> configMap, String sessionId) {
+            return new KafkaDestination(configMap, sessionId);
+        }
+    },
     INFLUX_DB{
         @Override
         public Destination createDestination(Map<String, String> configMap, String sessionId) {

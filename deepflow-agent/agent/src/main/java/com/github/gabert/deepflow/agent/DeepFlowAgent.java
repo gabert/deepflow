@@ -13,6 +13,8 @@ import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
 
 public class DeepFlowAgent {
+    private static final String AGENT_DEFAULT_EXCLUDE_PACKAGE = "com.github.gabert.deepflow.serializer";
+
     public static void premain(String agentArgs,
                                Instrumentation instrumentation) {
 
@@ -38,10 +40,10 @@ public class DeepFlowAgent {
             matcherExclude = matcherExclude.or(ElementMatchers.nameMatches(regex));
         }
 
-        ElementMatcher.Junction<TypeDescription> matcherAgentPackage = ElementMatchers.nameStartsWith("com.github.gabert.deepflow.serializer");
+        ElementMatcher.Junction<TypeDescription> matcherAgentPackage =
+                ElementMatchers.nameStartsWith(AGENT_DEFAULT_EXCLUDE_PACKAGE);
 
         new AgentBuilder.Default()
-//                .type(matcherInclude.and(ElementMatchers.not(matcherExclude)))
                 .type(matcherInclude.and(ElementMatchers.not(matcherExclude))
                                     .and(ElementMatchers.not(matcherAgentPackage)))
                 .transform((DynamicType.Builder<?> builder,

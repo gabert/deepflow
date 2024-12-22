@@ -18,6 +18,7 @@ public class DeepFlowAdvice {
     @Advice.OnMethodEnter
     public static void onEnter(@Advice.Origin Method method,
                                @Advice.AllArguments Object[] allArguments) {
+
         METHOD_LOGGER.logEntry(method, allArguments);
     }
 
