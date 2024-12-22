@@ -20,7 +20,7 @@ public class MetaIdTypeAdapter<T> extends TypeAdapter<T> {
         JsonElement jsonElement = defaultAdapter.toJsonTree(value);
 
         Class<?> valueClass = value.getClass();
-        String className = DeepFlowAdvice.formatClassName(valueClass);
+        String className = DataFormatter.formatClassName(valueClass);
 
         if (jsonElement.isJsonObject()) {
             JsonObject jsonObject = jsonElement.getAsJsonObject();
