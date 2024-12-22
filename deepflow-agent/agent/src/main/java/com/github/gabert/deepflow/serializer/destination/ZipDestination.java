@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
-import com.github.gabert.deepflow.serializer.ZipWriter;
 
 public class ZipDestination implements Destination {
     private final Map<String, ZipWriter> threadWriters = new HashMap<>();

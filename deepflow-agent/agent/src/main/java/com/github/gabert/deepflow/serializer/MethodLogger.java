@@ -10,19 +10,19 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class MethodLogger {
-    private final Gson GSON_DATA;
-    private final Gson GSON_EXCEPTION;
+    private static final Gson GSON_DATA;
+    private static final Gson GSON_EXCEPTION;
     private final Destination destination;
 
     static {
+        GSON_DATA = new GsonBuilder()
+                .registerTypeAdapterFactory(new MetaIdTypeAdapterFactory())
+                .create();
+        GSON_EXCEPTION = new Gson();
     }
 
     public MethodLogger(Destination destination) {
         this.destination = destination;
-        this.GSON_DATA = new GsonBuilder()
-                .registerTypeAdapterFactory(new MetaIdTypeAdapterFactory())
-                .create();
-        this.GSON_EXCEPTION = new Gson();
     }
 
     public void logEntry(Method method, Object[] allArguments) {
@@ -36,34 +36,42 @@ public class MethodLogger {
         StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
         int callerLine = stackTraceElements.length >= 3 ? stackTraceElements[2].getLineNumber() : 0;
 
-        sendToDestination(DataFormatter.formatLine("MS", methodSignature));
-        sendToDestination(DataFormatter.formatLine("TS", ts));
-        sendToDestination(DataFormatter.formatLine("CL", callerLine));
-        sendToDestination(DataFormatter.formatLine("AR", "[" + argsData + "]"));
+        StringBuilder logBuilder = new StringBuilder();
+
+        logBuilder.append(DataFormatter.formatLine("MS", methodSignature))
+                        .append(DataFormatter.formatLine("TS", ts))
+                        .append(DataFormatter.formatLine("CL", callerLine))
+                        .append(DataFormatter.formatLine("AR", "[" + argsData + "]"));
+
+        sendToDestination(logBuilder.toString());
     }
 
     public void logExit(Method method, Object returned, Throwable throwable, Object[] allArguments) {
+        StringBuilder logBuilder = new StringBuilder();
+
         if (Void.TYPE.equals(method.getGenericReturnType())) {
-            sendToDestination(DataFormatter.formatLine("RT", "VOID"));
+            logBuilder.append(DataFormatter.formatLine("RT", "VOID"));
         } else if (throwable != null) {
-            sendToDestination(DataFormatter.formatLine("RT" , "EXCEPTION"));
+            logBuilder.append(DataFormatter.formatLine("RT" , "EXCEPTION"));
         } else {
-            sendToDestination(DataFormatter.formatLine("RT", "VALUE"));
+            logBuilder.append(DataFormatter.formatLine("RT", "VALUE"));
         }
 
         if (throwable != null) {
             String exceptionString = GSON_EXCEPTION.toJson(new DataFormatter.ExceptionInfo(throwable));
-            sendToDestination(DataFormatter.formatLine("RE", exceptionString));
+            logBuilder.append(DataFormatter.formatLine("RE", exceptionString));
         } else {
-            sendToDestination(DataFormatter.formatLine("RE", GSON_DATA.toJson(returned)));
+            logBuilder.append(DataFormatter.formatLine("RE", GSON_DATA.toJson(returned)));
         }
 
         LocalTime te = LocalTime.now();
 
         String methodSignature = DataFormatter.transformMethodSignature(method);
 
-        sendToDestination(DataFormatter.formatLine("TE", te));
-        sendToDestination(DataFormatter.formatLine("ME", methodSignature));
+        logBuilder.append(DataFormatter.formatLine("TE", te));
+        logBuilder.append(DataFormatter.formatLine("ME", methodSignature));
+
+        sendToDestination(logBuilder.toString());
     }
 
     private void sendToDestination(String data) {
@@ -72,8 +80,9 @@ public class MethodLogger {
         try {
             destination.send(data, threadName);
         } catch (Exception e) {
+            // Do not interrupt the instrumented program due to the error.
+            System.err.println("Error during send data to destination.");
             e.printStackTrace();
-            throw new RuntimeException(e);
         }
     }
 }

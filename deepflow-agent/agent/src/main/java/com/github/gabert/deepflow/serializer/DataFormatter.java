@@ -8,7 +8,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DataFormatter {
-    public final static String DELIMITER = ";";
+    private static final String DELIMITER = ";";
+    private static final String METHOD_FORMAT = "%s.%s(%s) -> %s [%s]";
 
     public static String formatClassName(Class<?> clazz) {
         String fullClassName = clazz.getName();
@@ -31,7 +32,7 @@ public class DataFormatter {
                 .map(DataFormatter::formatClassName)
                 .collect(Collectors.joining(", "));
 
-        return String.format("%s.%s(%s) -> %s [%s]",
+        return String.format(METHOD_FORMAT,
                 formatClassName(declaringClass),
                 methodName,
                 argumentTypes,
@@ -58,5 +59,4 @@ public class DataFormatter {
                     .toList();
         }
     }
-
 }
