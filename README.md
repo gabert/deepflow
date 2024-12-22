@@ -52,3 +52,5 @@ java -javaagent:d:\Pracovny\Projekty\Projects\flowspy\agent\target\are-agent-jar
 # ToDo:
 - write tutorial
 - write argument checking at the end of the call.
+
+-javaagent:d:\Pracovny\Projekty\Projects\flowspy\agent\target\are-agent-jar-with-dependencies.jar=config=D:\temp\deepagent.cfg
