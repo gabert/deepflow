@@ -28,7 +28,7 @@
 
     <build>
         <sourceDirectory>src</sourceDirectory>
-        <finalName>are-agent</finalName>
+        <finalName>deepflow-agent</finalName>
         <plugins>
             <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>

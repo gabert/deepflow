@@ -1,7 +1,7 @@
 package com.github.gabert.deepflow.agent;
 
-import com.github.gabert.deepflow.serializer.Destination;
-import com.github.gabert.deepflow.serializer.DestinationType;
+import com.github.gabert.deepflow.serializer.destination.Destination;
+import com.github.gabert.deepflow.serializer.destination.DestinationType;
 
 import java.io.*;
 import java.time.LocalDateTime;
@@ -10,16 +10,12 @@ import java.util.*;
 
 
 public class AgentConfig {
-    private final String dumpLocation;
     private final List<String> matchersInclude = new ArrayList<>();
     private final List<String> matchersExclude = new ArrayList<>();
-    private final String triggerOn;
 
     private final Destination destination;
 
     private AgentConfig(Map<String, String> configMap) {
-        this.dumpLocation = configMap.get("session_dump_location");
-
         String matcherInclude = configMap.getOrDefault("matchers_include", "com.,org.");
         this.matchersInclude.addAll(Arrays.stream(matcherInclude.split(","))
                 .map(String::trim)
@@ -29,8 +25,6 @@ public class AgentConfig {
         this.matchersExclude.addAll(Arrays.stream(matcherExclude.split(","))
                 .map(String::trim)
                 .toList());
-
-        this.triggerOn = configMap.getOrDefault("trigger_on", null);
 
         String sessionId = generateSessionId();
         String destinationTypeConfig = configMap.get("destination").toUpperCase();
@@ -44,7 +38,6 @@ public class AgentConfig {
     public List<String> getMatchersExclude() {
         return matchersExclude;
     }
-
 
     public Destination getDestination() {
         return destination;

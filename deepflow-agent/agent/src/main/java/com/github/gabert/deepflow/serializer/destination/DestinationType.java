@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.serializer;
+package com.github.gabert.deepflow.serializer.destination;
 
 import java.util.Map;
 
@@ -9,10 +9,10 @@ public enum DestinationType {
             return new FileDestination(configMap, sessionId);
         }
     },
-    COMPRESSED_FILE {
+    ZIP {
         @Override
         public Destination createDestination(Map<String, String> configMap, String sessionId) {
-            return new CompressedFileDestination(configMap, sessionId);
+            return new ZipDestination(configMap, sessionId);
         }
     },
     INFLUX_DB{

@@ -1,7 +1,7 @@
 package com.github.gabert.deepflow.agent;
 
-import com.github.gabert.deepflow.serializer.Destination;
 import com.github.gabert.deepflow.serializer.MetaIdTypeAdapterFactory;
+import com.github.gabert.deepflow.serializer.destination.Destination;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.bytebuddy.asm.Advice;

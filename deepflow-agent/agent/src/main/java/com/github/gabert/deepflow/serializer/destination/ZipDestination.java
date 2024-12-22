@@ -1,15 +1,16 @@
-package com.github.gabert.deepflow.serializer;
+package com.github.gabert.deepflow.serializer.destination;
 
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import com.github.gabert.deepflow.serializer.ZipWriter;
 
-public class CompressedFileDestination implements Destination {
+public class ZipDestination implements Destination {
     private final Map<String, ZipWriter> threadWriters = new HashMap<>();
     private final String DUMP_FILE_PATTERN;
 
-    public CompressedFileDestination(Map<String, String> configMap, String sessionId) {
+    public ZipDestination(Map<String, String> configMap, String sessionId) {
         String dumpLocation = Paths.get(configMap.get("session_dump_location"),
                                  "SESSION-" + sessionId).toString();
         this.DUMP_FILE_PATTERN = Paths.get(dumpLocation,
