@@ -26,9 +26,12 @@ public class AgentConfig {
                 .map(String::trim)
                 .toList());
 
-        String sessionId = generateSessionId();
         String destinationTypeConfig = configMap.get("destination").toUpperCase();
-        this.destination = DestinationType.valueOf(destinationTypeConfig).createDestination(configMap, sessionId);
+
+        DestinationType destinationType = DestinationType.fromString(destinationTypeConfig);
+
+        String sessionId = generateSessionId();
+        this.destination = destinationType.createDestination(configMap, sessionId);
     }
 
     public List<String> getMatchersInclude() {
