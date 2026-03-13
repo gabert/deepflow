@@ -1,6 +1,5 @@
 package com.github.gabert.deepflow.serializer;
 
-import com.github.gabert.deepflow.agent.DeepFlowAdvice;
 import com.google.gson.*;
 import com.google.gson.internal.Streams;
 import com.google.gson.stream.JsonReader;
@@ -17,6 +16,11 @@ public class MetaIdTypeAdapter<T> extends TypeAdapter<T> {
 
     @Override
     public void write(JsonWriter out, T value) throws IOException {
+        if (value == null) {
+            out.nullValue();
+            return;
+        }
+
         JsonElement jsonElement = defaultAdapter.toJsonTree(value);
 
         Class<?> valueClass = value.getClass();

@@ -41,11 +41,12 @@ public class DeepFlowAgent {
         }
 
         ElementMatcher.Junction<TypeDescription> matcherAgentPackage =
-                ElementMatchers.nameStartsWith(AGENT_DEFAULT_EXCLUDE_PACKAGE);
+                ElementMatchers.nameStartsWith(AGENT_DEFAULT_EXCLUDE_PACKAGE)
+                        .or(ElementMatchers.nameContains("$$"));
+
 
         new AgentBuilder.Default()
-                .type(matcherInclude.and(ElementMatchers.not(matcherExclude))
-                                    .and(ElementMatchers.not(matcherAgentPackage)))
+                .type(matcherInclude)
                 .transform((DynamicType.Builder<?> builder,
                             TypeDescription type,
                             ClassLoader loader,
@@ -55,6 +56,8 @@ public class DeepFlowAgent {
                                             .and(ElementMatchers.not(ElementMatchers.named("toString")))
                                             .and(ElementMatchers.not(ElementMatchers.named("equals")))
                                             .and(ElementMatchers.not(ElementMatchers.named("hashCode"))))))
+                .disableClassFormatChanges() // Prevent class format changes for frameworks
+                .ignore(matcherAgentPackage)
                 .installOn(instrumentation);
     }
 }

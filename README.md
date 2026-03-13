@@ -40,17 +40,34 @@ The project is split into two parts:
    cd deepflow
    ```
 
-2. **Build Project**
+2. **Build the agent and demo**
 ```sh
-cd agent
+cd deepflow-agent
 mvn clean install
 ```
 
-java -javaagent:d:\Pracovny\Projekty\Projects\flowspy\agent\target\are-agent-jar-with-dependencies.jar=config=D:\temp\deepagent.cfg   
+### Running the Demo
 
+The demo is a simple standalone Java application that creates and mutates a few objects. Run it with the agent attached:
+
+```sh
+java -javaagent:deepflow-agent/agent/target/deepflow-agent-jar-with-dependencies.jar=config=deepagent.cfg \
+     -jar deepflow-agent/demo/target/DeepFlowDemo-0.0.1-SNAPSHOT.jar
+```
+
+Trace files will be written to the location specified in `deepagent.cfg` (`session_dump_location`, default `D:\temp`).
+
+### Configuration (`deepagent.cfg`)
+
+Key properties:
+
+```properties
+session_dump_location=D:\temp          # Where trace files are written
+matchers_include=com\.github\..*       # Regex of classes to instrument
+destination=file                       # file | zip | kafka
+compress_file_output=false
+```
 
 # ToDo:
 - write tutorial
 - write argument checking at the end of the call.
-
--javaagent:d:\Pracovny\Projekty\Projects\flowspy\agent\target\are-agent-jar-with-dependencies.jar=config=D:\temp\deepagent.cfg

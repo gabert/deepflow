@@ -21,12 +21,6 @@ public enum DestinationType {
         public Destination createDestination(Map<String, String> configMap, String sessionId) {
             return new KafkaDestination(configMap, sessionId);
         }
-    },
-    INFLUX_DB{
-        @Override
-        public Destination createDestination(Map<String, String> configMap, String sessionId) {
-            return new InfluxDBDestination(configMap, sessionId);
-        }
     };
 
     public static DestinationType fromString(String value) {

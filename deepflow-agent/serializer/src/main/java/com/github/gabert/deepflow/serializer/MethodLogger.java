@@ -10,16 +10,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class MethodLogger {
-    private static final Gson GSON_DATA;
-    private static final Gson GSON_EXCEPTION;
+    private static final Gson GSON_DATA = GsonProvider.getGson();;
+    private static final Gson GSON_EXCEPTION = new Gson();
     private final Destination destination;
-
-    static {
-        GSON_DATA = new GsonBuilder()
-                .registerTypeAdapterFactory(new MetaIdTypeAdapterFactory())
-                .create();
-        GSON_EXCEPTION = new Gson();
-    }
 
     public MethodLogger(Destination destination) {
         this.destination = destination;
@@ -29,7 +22,19 @@ public class MethodLogger {
         LocalTime ts = LocalTime.now();
 
         String argsData = Stream.of(allArguments).
-                map(GSON_DATA::toJson).
+                map(arg -> {
+                    try {
+                        return GSON_DATA.toJson(arg); // Attempt serialization
+                    } catch (Exception e) {
+                        // Log detailed information about the failure
+                        System.err.println("Serialization failed!");
+                        System.err.println("Method: " + DataFormatter.transformMethodSignature(method));
+                        System.err.println("Problematic Argument Type: " + (arg != null ? arg.getClass().getName() : "null"));
+                        System.err.println("Problematic Argument Value: " + arg);
+                        e.printStackTrace();
+                        return "\"<serialization error>\""; // Fallback for failed serialization
+                    }
+                }).
                 collect(Collectors.joining(", "));
 
         String methodSignature = DataFormatter.transformMethodSignature(method);
