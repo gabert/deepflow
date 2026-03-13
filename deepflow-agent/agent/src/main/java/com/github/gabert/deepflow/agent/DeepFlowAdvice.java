@@ -25,9 +25,8 @@ public class DeepFlowAdvice {
     @Advice.OnMethodExit(onThrowable = Throwable.class)
     public static void onExit(@Advice.Origin Method method,
                               @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returned,
-                              @Advice.Thrown Throwable throwable,
-                              @Advice.AllArguments Object[] allArguments) {
+                              @Advice.Thrown Throwable throwable) {
 
-        METHOD_LOGGER.logExit(method, returned, throwable, allArguments);
+        METHOD_LOGGER.logExit(method, returned, throwable);
     }
 }

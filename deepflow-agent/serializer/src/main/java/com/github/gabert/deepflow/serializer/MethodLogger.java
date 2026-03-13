@@ -10,8 +10,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class MethodLogger {
-    private static final Gson GSON_DATA = GsonProvider.getGson();;
+    private static final Gson GSON_DATA = GsonProvider.getGson();
     private static final Gson GSON_EXCEPTION = new Gson();
+    private static final StackWalker STACK_WALKER = StackWalker.getInstance();
     private final Destination destination;
 
     public MethodLogger(Destination destination) {
@@ -38,8 +39,10 @@ public class MethodLogger {
                 collect(Collectors.joining(", "));
 
         String methodSignature = DataFormatter.transformMethodSignature(method);
-        StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
-        int callerLine = stackTraceElements.length >= 3 ? stackTraceElements[2].getLineNumber() : 0;
+        int callerLine = STACK_WALKER
+                .walk(s -> s.skip(1).findFirst())
+                .map(StackWalker.StackFrame::getLineNumber)
+                .orElse(0);
 
         StringBuilder logBuilder = new StringBuilder();
 
@@ -51,7 +54,7 @@ public class MethodLogger {
         sendToDestination(logBuilder.toString());
     }
 
-    public void logExit(Method method, Object returned, Throwable throwable, Object[] allArguments) {
+    public void logExit(Method method, Object returned, Throwable throwable) {
         StringBuilder logBuilder = new StringBuilder();
 
         if (Void.TYPE.equals(method.getGenericReturnType())) {
