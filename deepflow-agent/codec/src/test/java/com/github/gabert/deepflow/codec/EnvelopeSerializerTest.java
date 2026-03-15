@@ -84,9 +84,16 @@ class EnvelopeSerializerTest {
    // Private helpers — CBOR navigation
    // ─────────────────────────────────────────────────────────────────────────
 
+   private static final ObjectMapper CBOR_MAPPER;
+
+   static {
+      CBOR_MAPPER = new ObjectMapper(new CBORFactory());
+      CBOR_MAPPER.registerModule(new EnvelopeModule());
+   }
+
    /** Serialise {@code value} with the envelope CBOR mapper. */
    private static byte[] toCbor(Object value) throws Exception {
-      return EnvelopeDemo.toCbor(value);
+      return CBOR_MAPPER.writeValueAsBytes(value);
    }
 
    /**

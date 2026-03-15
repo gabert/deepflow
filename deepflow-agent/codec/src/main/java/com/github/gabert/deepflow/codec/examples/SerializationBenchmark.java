@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.codec;
+package com.github.gabert.deepflow.codec.examples;
 
 import java.io.ByteArrayOutputStream;
 import java.io.Serial;
@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
+import com.github.gabert.deepflow.codec.EnvelopeModule;
 
 /**
  * Standalone CBOR serialization benchmark for ObjectIdRegistry / EnvelopeSerializer.

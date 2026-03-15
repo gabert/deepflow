@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.codec;
+package com.github.gabert.deepflow.codec.examples;
 
 import java.io.ByteArrayInputStream;
 import java.util.List;
@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
+import com.github.gabert.deepflow.codec.EnvelopeModule;
 
 // ─────────────────────────────────────────────────────────────
 // EnvelopeDemo
@@ -64,7 +65,7 @@ public class EnvelopeDemo {
    // ── Helpers ───────────────────────────────────────────────
 
    // Serialize object to CBOR bytes using envelope serializer
-   static byte[] toCbor(Object value) throws Exception {
+   public static byte[] toCbor(Object value) throws Exception {
       return CBOR_MAPPER.writeValueAsBytes(value);
    }
 
@@ -72,7 +73,7 @@ public class EnvelopeDemo {
    // Uses a plain ObjectMapper (no envelope module) so we get
    // a clean JSON representation of the CBOR structure.
    // Integer field keys (FieldIds) appear as-is in the output.
-   static String cborToJson(byte[] cbor) throws Exception {
+   public static String cborToJson(byte[] cbor) throws Exception {
       Object tree = new ObjectMapper(new CBORFactory()).readValue(new ByteArrayInputStream(cbor), Object.class);
       return JSON_MAPPER.writeValueAsString(tree);
    }
@@ -242,7 +243,7 @@ public class EnvelopeDemo {
    // Jackson CBOR may deserialize integer keys as either Integer or String
    // depending on the mapper configuration — we check both.
    @SuppressWarnings("unchecked")
-   static long extractObjectId(byte[] cbor) throws Exception {
+   public static long extractObjectId(byte[] cbor) throws Exception {
       Map<Object, Object> map =
             new ObjectMapper(new CBORFactory()).readValue(new ByteArrayInputStream(cbor), Map.class);
 
