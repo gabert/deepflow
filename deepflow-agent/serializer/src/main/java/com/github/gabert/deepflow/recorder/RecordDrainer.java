@@ -11,8 +11,7 @@ import java.util.Map;
  * Drains records from a {@link RecordBuffer} and writes them as human-readable
  * text to a {@link Writer}. Runs in a background thread.
  *
- * <p>Output format uses {@code TAG;value} lines, comparable to the existing
- * {@code .dft} text format from MethodLogger.
+ * <p>Output format uses {@code TAG;value} lines in the {@code .dft} text format.
  */
 public final class RecordDrainer {
     private static final String DELIMITER = ";";

@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.serializer.destination;
+package com.github.gabert.deepflow.recorder;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;

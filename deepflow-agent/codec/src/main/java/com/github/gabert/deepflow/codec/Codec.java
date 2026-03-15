@@ -52,13 +52,6 @@ public final class Codec {
    }
 
    /**
-    * Convert a decoded Java object (from {@link #decode}) to a pretty-printed JSON string.
-    */
-   public static String toJson(Object decoded) throws IOException {
-      return JSON_MAPPER.writeValueAsString(decoded);
-   }
-
-   /**
     * Convert a decoded Java object to a human-readable JSON string,
     * replacing envelope integer keys with their field names.
     */

@@ -6,13 +6,15 @@ import com.github.gabert.deepflow.recorder.RecordBuffer;
 import com.github.gabert.deepflow.recorder.RecordDrainer;
 import com.github.gabert.deepflow.recorder.RecordWriter;
 import com.github.gabert.deepflow.recorder.UnboundedRecordBuffer;
-import com.github.gabert.deepflow.serializer.DataFormatter;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -96,7 +98,7 @@ public class DeepFlowAdvice {
     public static void recordEntry(Method method, Object self, Object[] allArguments) {
         if (RECORD_BUFFER == null) return;
         try {
-            String signature = DataFormatter.transformMethodSignature(method);
+            String signature = formatMethodSignature(method);
             String threadName = Thread.currentThread().getName();
             long timestamp = System.currentTimeMillis();
             int depth = CALL_DEPTH.get();
@@ -131,8 +133,7 @@ public class DeepFlowAdvice {
         try {
             String threadName = Thread.currentThread().getName();
             long timestamp = System.currentTimeMillis();
-            int depth = CALL_DEPTH.get();
-            CALL_DEPTH.set(Math.max(0, depth - 1));
+            CALL_DEPTH.set(Math.max(0, CALL_DEPTH.get() - 1));
 
             if (throwable != null) {
                 byte[] excCbor = Codec.encode(buildExceptionData(throwable));
@@ -158,5 +159,31 @@ public class DeepFlowAdvice {
                 "message", String.valueOf(throwable.getMessage()),
                 "stacktrace", stacktrace
         );
+    }
+
+    // --- Method signature formatting ---
+
+    private static final String METHOD_FORMAT = "%s.%s(%s) -> %s [%s]";
+
+    private static String formatMethodSignature(Method method) {
+        String argumentTypes = Arrays.stream(method.getParameterTypes())
+                .map(DeepFlowAdvice::formatClassName)
+                .collect(Collectors.joining(", "));
+
+        return String.format(METHOD_FORMAT,
+                formatClassName(method.getDeclaringClass()),
+                method.getName(),
+                argumentTypes,
+                formatClassName(method.getReturnType()),
+                Modifier.toString(method.getModifiers()));
+    }
+
+    private static String formatClassName(Class<?> clazz) {
+        String name = clazz.getName();
+        int lastDot = name.lastIndexOf('.');
+        if (lastDot != -1) {
+            name = name.substring(0, lastDot) + "::" + name.substring(lastDot + 1);
+        }
+        return name;
     }
 }

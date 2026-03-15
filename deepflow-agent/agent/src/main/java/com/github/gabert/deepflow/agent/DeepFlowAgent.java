@@ -13,7 +13,6 @@ import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
 
 public class DeepFlowAgent {
-    private static final String AGENT_DEFAULT_EXCLUDE_PACKAGE = "com.github.gabert.deepflow.serializer";
     private static final String AGENT_RECORDER_EXCLUDE_PACKAGE = "com.github.gabert.deepflow.recorder";
     private static final String AGENT_CODEC_EXCLUDE_PACKAGE = "com.github.gabert.deepflow.codec";
     private static final String AGENT_SHADED_EXCLUDE_PACKAGE = "com.github.gabert.deepflow.shaded";
@@ -38,21 +37,23 @@ public class DeepFlowAgent {
             matcherInclude = matcherInclude.or(ElementMatchers.nameMatches(regex));
         }
 
-        ElementMatcher.Junction<TypeDescription> matcherExclude = ElementMatchers.none();
-        for (String regex : agentConfig.getMatchersExclude()) {
-            matcherExclude = matcherExclude.or(ElementMatchers.nameMatches(regex));
+        ElementMatcher.Junction<TypeDescription> typeMatcher = matcherInclude;
+        if (!agentConfig.getMatchersExclude().isEmpty()) {
+            ElementMatcher.Junction<TypeDescription> matcherExclude = ElementMatchers.none();
+            for (String regex : agentConfig.getMatchersExclude()) {
+                matcherExclude = matcherExclude.or(ElementMatchers.nameMatches(regex));
+            }
+            typeMatcher = typeMatcher.and(ElementMatchers.not(matcherExclude));
         }
 
         ElementMatcher.Junction<TypeDescription> matcherAgentPackage =
-                ElementMatchers.nameStartsWith(AGENT_DEFAULT_EXCLUDE_PACKAGE)
-                        .or(ElementMatchers.nameStartsWith(AGENT_RECORDER_EXCLUDE_PACKAGE))
+                ElementMatchers.nameStartsWith(AGENT_RECORDER_EXCLUDE_PACKAGE)
                         .or(ElementMatchers.nameStartsWith(AGENT_CODEC_EXCLUDE_PACKAGE))
                         .or(ElementMatchers.nameStartsWith(AGENT_SHADED_EXCLUDE_PACKAGE))
                         .or(ElementMatchers.nameContains("$$"));
 
-
         new AgentBuilder.Default()
-                .type(matcherInclude)
+                .type(typeMatcher)
                 .transform((DynamicType.Builder<?> builder,
                             TypeDescription type,
                             ClassLoader loader,

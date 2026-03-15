@@ -15,15 +15,21 @@ public class AgentConfig {
     private final boolean expandThis;
 
     private AgentConfig(Map<String, String> configMap) {
-        String matcherInclude = configMap.getOrDefault("matchers_include", "com.,org.");
-        this.matchersInclude.addAll(Arrays.stream(matcherInclude.split(","))
-                .map(String::trim)
-                .toList());
+        String matcherInclude = configMap.getOrDefault("matchers_include", "");
+        if (!matcherInclude.isEmpty()) {
+            this.matchersInclude.addAll(Arrays.stream(matcherInclude.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList());
+        }
 
-        String matcherExclude = configMap.getOrDefault("matchers_exclude", "com.,org.");
-        this.matchersExclude.addAll(Arrays.stream(matcherExclude.split(","))
-                .map(String::trim)
-                .toList());
+        String matcherExclude = configMap.getOrDefault("matchers_exclude", "");
+        if (!matcherExclude.isEmpty()) {
+            this.matchersExclude.addAll(Arrays.stream(matcherExclude.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList());
+        }
 
         this.sessionDumpLocation = configMap.get("session_dump_location");
         this.sessionId = generateSessionId();
