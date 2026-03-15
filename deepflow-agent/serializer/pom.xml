@@ -14,6 +14,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>com.github.gabert</groupId>
+            <artifactId>DeepFlowCodec</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>net.bytebuddy</groupId>
             <artifactId>byte-buddy</artifactId>
             <version>1.18.4</version>
