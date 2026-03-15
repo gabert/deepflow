@@ -52,10 +52,14 @@ public final class RecordReader {
         pos += RecordType.SIGNATURE_LENGTH_SIZE;
         String signature = new String(payload, pos, sigLen, StandardCharsets.UTF_8);
         pos += sigLen;
+        int threadLen = getShort(payload, pos);
+        pos += RecordType.THREAD_NAME_LENGTH_SIZE;
+        String threadName = new String(payload, pos, threadLen, StandardCharsets.UTF_8);
+        pos += threadLen;
         long timestamp = getLong(payload, pos);
         pos += RecordType.TIMESTAMP_SIZE;
         int callerLine = getInt(payload, pos);
-        return new MethodStartData(signature, timestamp, callerLine);
+        return new MethodStartData(signature, threadName, timestamp, callerLine);
     }
 
     public static MethodEndData decodeMethodEnd(Record record) {

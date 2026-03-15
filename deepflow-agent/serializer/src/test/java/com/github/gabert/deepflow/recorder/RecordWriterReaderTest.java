@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class RecordWriterReaderTest {
 
     private static final String SIGNATURE = "com.example::Foo.bar(java.lang::String) -> void [public]";
+    private static final String THREAD = "main";
 
     // --- logEntry ---
 
@@ -21,7 +22,7 @@ class RecordWriterReaderTest {
         byte[] argsCbor = Codec.encode(new Object[]{"arg1", 42});
         long ts = System.currentTimeMillis();
 
-        byte[] data = RecordWriter.logEntry(SIGNATURE, ts, 99, argsCbor);
+        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, ts, 99, argsCbor);
 
         List<Record> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
@@ -30,6 +31,7 @@ class RecordWriterReaderTest {
 
         MethodStartData meta = RecordReader.decodeMethodStart(records.get(0));
         assertEquals(SIGNATURE, meta.signature);
+        assertEquals(THREAD, meta.threadName);
         assertEquals(ts, meta.timestamp);
         assertEquals(99, meta.callerLine);
 
@@ -100,7 +102,7 @@ class RecordWriterReaderTest {
         byte[] argsCbor = Codec.encode(new Object[]{"x", 1});
         byte[] retCbor = Codec.encode(42);
 
-        byte[] entry = RecordWriter.logEntry(SIGNATURE, tsStart, 10, argsCbor);
+        byte[] entry = RecordWriter.logEntry(SIGNATURE, THREAD, tsStart, 10, argsCbor);
         byte[] exit = RecordWriter.logExit(tsEnd, retCbor, false);
 
         byte[] stream = concat(entry, exit);
@@ -125,7 +127,7 @@ class RecordWriterReaderTest {
         byte[] argsCbor = Codec.encode(new Object[]{"input"});
         byte[] excCbor = Codec.encode(Map.of("message", "fail", "stacktrace", List.of("at X.y(X.java:5)")));
 
-        byte[] entry = RecordWriter.logEntry(SIGNATURE, tsStart, 20, argsCbor);
+        byte[] entry = RecordWriter.logEntry(SIGNATURE, THREAD, tsStart, 20, argsCbor);
         byte[] exit = RecordWriter.logExitException(tsEnd, excCbor);
 
         byte[] stream = concat(entry, exit);
@@ -153,8 +155,8 @@ class RecordWriterReaderTest {
         byte[] innerArgs = Codec.encode(new Object[]{"data"});
         byte[] innerRet = Codec.encode(1);
 
-        byte[] entryOuter = RecordWriter.logEntry(sigOuter, ts1, 10, outerArgs);
-        byte[] entryInner = RecordWriter.logEntry(sigInner, ts2, 20, innerArgs);
+        byte[] entryOuter = RecordWriter.logEntry(sigOuter, "http-handler-1", ts1, 10, outerArgs);
+        byte[] entryInner = RecordWriter.logEntry(sigInner, "http-handler-1", ts2, 20, innerArgs);
         byte[] exitInner = RecordWriter.logExit(ts3, innerRet, false);
         byte[] exitOuter = RecordWriter.logExit(ts4, null, true);
 
@@ -176,11 +178,13 @@ class RecordWriterReaderTest {
         assertEquals(RecordType.RETURN, records.get(6).type());
         assertEquals(RecordType.METHOD_END, records.get(7).type());
 
-        // Verify signatures match nesting
+        // Verify signatures and thread names
         MethodStartData outer = RecordReader.decodeMethodStart(records.get(0));
         MethodStartData inner = RecordReader.decodeMethodStart(records.get(2));
         assertEquals(sigOuter, outer.signature);
         assertEquals(sigInner, inner.signature);
+        assertEquals("http-handler-1", outer.threadName);
+        assertEquals("http-handler-1", inner.threadName);
 
         // Verify timestamps
         assertEquals(ts1, outer.timestamp);
@@ -197,7 +201,7 @@ class RecordWriterReaderTest {
 
     @Test
     void readAllFromInputStream() throws Exception {
-        byte[] data = RecordWriter.logEntry(SIGNATURE, 1000L, 1, Codec.encode(new Object[]{}));
+        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, Codec.encode(new Object[]{}));
 
         List<Record> records = RecordReader.readAll(new ByteArrayInputStream(data));
         assertEquals(2, records.size());
@@ -212,7 +216,7 @@ class RecordWriterReaderTest {
 
     @Test
     void truncatedFrameThrows() throws Exception {
-        byte[] data = RecordWriter.logEntry(SIGNATURE, 1000L, 1, Codec.encode(new Object[]{"x"}));
+        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, Codec.encode(new Object[]{"x"}));
         byte[] chopped = Arrays.copyOf(data, data.length - 1);
         assertThrows(IllegalArgumentException.class, () -> RecordReader.readAll(chopped));
     }
@@ -222,7 +226,7 @@ class RecordWriterReaderTest {
         byte[] bigArgs = new byte[100_000];
         Arrays.fill(bigArgs, (byte) 0x42);
 
-        byte[] data = RecordWriter.logEntry(SIGNATURE, 1000L, 1, bigArgs);
+        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, bigArgs);
 
         List<Record> records = RecordReader.readAll(data);
         assertEquals(2, records.size());

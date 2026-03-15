@@ -9,9 +9,9 @@ public final class RecordWriter {
 
     // --- Public API ---
 
-    public static byte[] logEntry(String signature, long timestamp, int callerLine,
-                                  byte[] argsCbor) {
-        byte[] start = methodStart(signature, timestamp, callerLine);
+    public static byte[] logEntry(String signature, String threadName, long timestamp,
+                                  int callerLine, byte[] argsCbor) {
+        byte[] start = methodStart(signature, threadName, timestamp, callerLine);
         byte[] args = arguments(argsCbor);
         return concat(start, args);
     }
@@ -30,14 +30,20 @@ public final class RecordWriter {
 
     // --- logEntry internals ---
 
-    private static byte[] methodStart(String signature, long timestamp, int callerLine) {
+    private static byte[] methodStart(String signature, String threadName,
+                                       long timestamp, int callerLine) {
         byte[] sigBytes = signature.getBytes(StandardCharsets.UTF_8);
+        byte[] threadBytes = threadName.getBytes(StandardCharsets.UTF_8);
         byte[] payload = new byte[RecordType.SIGNATURE_LENGTH_SIZE + sigBytes.length
+                                + RecordType.THREAD_NAME_LENGTH_SIZE + threadBytes.length
                                 + RecordType.TIMESTAMP_SIZE + RecordType.CALLER_LINE_SIZE];
         int pos = 0;
         pos = putShort(payload, pos, (short) sigBytes.length);
         System.arraycopy(sigBytes, 0, payload, pos, sigBytes.length);
         pos += sigBytes.length;
+        pos = putShort(payload, pos, (short) threadBytes.length);
+        System.arraycopy(threadBytes, 0, payload, pos, threadBytes.length);
+        pos += threadBytes.length;
         pos = putLong(payload, pos, timestamp);
         putInt(payload, pos, callerLine);
         return frame(RecordType.METHOD_START, payload);
