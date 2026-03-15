@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.codec;
+package com.github.gabert.deepflow.codec.envelope;
 
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;

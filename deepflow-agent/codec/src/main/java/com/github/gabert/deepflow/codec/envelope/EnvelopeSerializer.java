@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.codec;
+package com.github.gabert.deepflow.codec.envelope;
 
 import java.io.IOException;
 import java.util.IdentityHashMap;

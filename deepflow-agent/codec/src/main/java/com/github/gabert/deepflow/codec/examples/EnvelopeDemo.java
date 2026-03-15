@@ -7,7 +7,7 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
-import com.github.gabert.deepflow.codec.EnvelopeModule;
+import com.github.gabert.deepflow.codec.envelope.EnvelopeModule;
 
 // ─────────────────────────────────────────────────────────────
 // EnvelopeDemo

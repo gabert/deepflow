@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.codec;
+package com.github.gabert.deepflow.codec.envelope;
 
 import com.fasterxml.jackson.databind.module.SimpleModule;
 

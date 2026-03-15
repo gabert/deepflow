@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.codec;
+package com.github.gabert.deepflow.codec.envelope;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,8 +23,8 @@ import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
  * JUnit 5 tests for {@link ObjectIdRegistry}, {@link ClassNameCache}, and {@link EnvelopeSerializer}.
  *
  * <h2>Package access</h2> All production classes under test are package-private. These tests live in the same package
- * ({@code com.github.gabert.deepflow.codec}) so no reflection is needed to access them — except for the one test that
- * deliberately probes a private field of {@link ObjectIdRegistry.IdentityWeakRef} to simulate a hash collision.
+ * ({@code com.github.gabert.deepflow.codec.envelope}) so no reflection is needed to access them — except for the one
+ * test that deliberately probes a private field of {@link ObjectIdRegistry.IdentityWeakRef} to simulate a hash collision.
  *
  * <h2>CBOR field key constants (from {@link FieldIds})</h2>
  *
@@ -188,21 +188,6 @@ class EnvelopeSerializerTest {
       }
 
       // ── Test 2: two different instances — even with same identityHashCode ─
-      //
-      // IdentityWeakRef uses System.identityHashCode() only as a hash-bucket
-      // finder.  Its equals() method uses == (raw JVM pointer comparison), so
-      // two different objects that happen to share the same identityHashCode
-      // must never be confused and must receive distinct ids.
-      //
-      // This is verified in two complementary ways:
-      //
-      //   (a) White-box: forcibly give two IdentityWeakRef keys the same
-      //       identityHash via reflection, then verify equals() still returns
-      //       false — proving the == guard works correctly.
-      //
-      //   (b) Black-box: allocate enough objects to make birthday-paradox
-      //       hash collisions statistically likely, then verify idOf() produces
-      //       a unique id for every one of them.
 
       @Test
       @DisplayName("IdentityWeakRef.equals() uses == not identityHashCode (white-box collision test)")
@@ -234,10 +219,6 @@ class EnvelopeSerializerTest {
       @Test
       @DisplayName("distinct instances always receive distinct ids even under hash collisions (black-box)")
       void largePopulationAllGetUniqueIds() {
-         // Allocating 10 000 objects makes hash collisions in the 32-bit
-         // identityHashCode space virtually certain via the birthday paradox,
-         // exercising the == path in IdentityWeakRef.equals() under real
-         // registry load.
          int count = 10_000;
          Object[] objects = new Object[count];
          long[] ids = new long[count];
@@ -265,15 +246,13 @@ class EnvelopeSerializerTest {
    @DisplayName("EnvelopeSerializer")
    class EnvelopeSerializerTests {
 
-      // ── Test 3: cycle detection, no StackOverflowError ────────────────
-
       @Test
       @DisplayName("direct cycle A → B → A does not throw StackOverflowError")
       void directCycleDoesNotCauseStackOverflow() {
          Node a = new Node("A");
          Node b = new Node("B");
          a.next = b;
-         b.next = a; // cycle
+         b.next = a;
 
          assertDoesNotThrow(() -> toCbor(a), "Serializing a two-node cycle must not throw StackOverflowError");
       }
@@ -286,7 +265,7 @@ class EnvelopeSerializerTest {
          Node c = new Node("C");
          a.next = b;
          b.next = c;
-         c.next = a; // three-node cycle
+         c.next = a;
 
          assertDoesNotThrow(() -> toCbor(a), "Three-node cycle must not cause StackOverflowError");
       }
@@ -306,22 +285,17 @@ class EnvelopeSerializerTest {
          assertTrue(isCycleRef(cycleNode), "The back-reference node must carry CYCLE_REF (key 5) = true");
       }
 
-      // ── Test 4: refId points to the correct objectId ──────────────────
-
       @Test
       @DisplayName("refId in the cycle node equals the objectId of the already-seen object")
       void refIdMatchesObjectIdOfAlreadySeenObject() throws Exception {
          Node a = new Node("A");
          Node b = new Node("B");
          a.next = b;
-         b.next = a; // b.next back-references a
+         b.next = a;
 
          Map<Object, Object> aEnv = cborToMap(toCbor(a));
-
-         // objectId emitted for 'a' at the root of the envelope tree
          long aObjectId = objectId(aEnv);
 
-         // Navigate to the cycle node that represents b.next
          Map<Object, Object> bEnv = fieldEnvelope(aEnv, "next");
          Map<Object, Object> cycleNode = fieldEnvelope(bEnv, "next");
 
@@ -340,7 +314,7 @@ class EnvelopeSerializerTest {
          Node c = new Node("C");
          a.next = b;
          b.next = c;
-         c.next = a; // c.next back-references a
+         c.next = a;
 
          Map<Object, Object> aEnv = cborToMap(toCbor(a));
          long aId = objectId(aEnv);
@@ -351,13 +325,6 @@ class EnvelopeSerializerTest {
 
          assertEquals(aId, refId(cycleNode), "In a three-node cycle the refId must point back to the root");
       }
-
-      // ── Test 5: Object-typed fields get className captured ────────────
-      //
-      // When a field is declared as Object, the delegate serializer resolves
-      // to a generic Object handler (handledType == Object).  EnvelopeSerializer
-      // detects this and re-resolves by the actual runtime class, so CLASS_NAME
-      // is always the concrete type — never "java.lang.Object".
 
       @Test
       @DisplayName("Object-typed field: className is the runtime type, not 'java.lang.Object'")
@@ -391,26 +358,15 @@ class EnvelopeSerializerTest {
          assertTrue(((Number) id).longValue() > 0, "OBJECT_ID must be a positive long");
       }
 
-      // ── Test 6: same instance referenced twice → refId on second ──────
-      //
-      // The 'seen' IdentityHashMap is scoped to one top-level writeValue()
-      // call.  The first occurrence of an object is fully serialised
-      // (objectId + className + value).  Any subsequent occurrence within the
-      // same call must be emitted as a cycle-reference node (refId + cycleRef)
-      // whose refId equals the objectId from the first occurrence.
-
       @Test
       @DisplayName("second reference to same instance becomes a refId node pointing at the first")
       void sameInstanceReferencedTwiceProducesRefIdOnSecondOccurrence() throws Exception {
-         // 'shared' will appear twice — once via a.next, once via b.next.
          Node shared = new Node("shared");
          Node a = new Node("A");
          Node b = new Node("B");
          a.next = shared;
-         b.next = shared; // exact same JVM instance
+         b.next = shared;
 
-         // Wrap in a Map so both a and b fall under one top-level writeValue(),
-         // meaning the 'seen' set is shared across both branches.
          Map<String, Node> root = Map.of("a", a, "b", b);
 
          Map<Object, Object> rootEnv = cborToMap(toCbor(root));
@@ -427,15 +383,12 @@ class EnvelopeSerializerTest {
          boolean aIsRef = isCycleRef(aNext);
          boolean bIsRef = isCycleRef(bNext);
 
-         // Exactly one branch must hold the full envelope; the other the ref node.
          assertTrue(
             aIsRef ^ bIsRef,
             "Exactly one occurrence of 'shared' must be a refId node " + "(aIsRef=" + aIsRef + ", bIsRef=" + bIsRef
                + ")");
 
-         // fullEnv = whichever branch is NOT the ref node
          Map<Object, Object> fullEnv = !aIsRef ? aNext : bNext;
-         // refNode = whichever branch IS the ref node
          Map<Object, Object> refNode = aIsRef ? aNext : bNext;
 
          assertEquals(
@@ -457,7 +410,6 @@ class EnvelopeSerializerTest {
       @Test
       @DisplayName("INSTANCE is a singleton — always the exact same object reference")
       void instanceIsSingleton() {
-         // Static final field: two reads must return the same reference.
          assertSame(
             ClassNameCache.INSTANCE,
             ClassNameCache.INSTANCE,
@@ -475,7 +427,6 @@ class EnvelopeSerializerTest {
       @Test
       @DisplayName("returns the correct binary name for inner test-fixture classes")
       void returnsCorrectNameForInnerClasses() {
-         // Inner static classes have a '$'-separated binary name.
          assertEquals(Node.class.getName(), ClassNameCache.INSTANCE.get(Node.class));
          assertEquals(Leaf.class.getName(), ClassNameCache.INSTANCE.get(Leaf.class));
       }
@@ -483,10 +434,6 @@ class EnvelopeSerializerTest {
       @Test
       @DisplayName("repeated calls for the same Class return the identical cached String instance")
       void repeatedCallsReturnSameStringInstance() {
-         // ClassValue.get() caches the result of computeValue().
-         // The same Class key must always return the *identical* String object,
-         // not merely an equal one — proving Class.getName() is not called
-         // on every lookup.
          String first = ClassNameCache.INSTANCE.get(Node.class);
          String second = ClassNameCache.INSTANCE.get(Node.class);
          String third = ClassNameCache.INSTANCE.get(Node.class);
@@ -510,7 +457,7 @@ class EnvelopeSerializerTest {
    }
 
    // =========================================================================
-   // Test 8 — Full round-trip: CBOR → deserialised Map → validate structure
+   // Test 8 — Full round-trip
    // =========================================================================
 
    @Nested
@@ -524,17 +471,14 @@ class EnvelopeSerializerTest {
 
          Map<Object, Object> env = cborToMap(toCbor(node));
 
-         // --- OBJECT_ID ---
          Object idObj = get(env, FieldIds.OBJECT_ID);
          assertNotNull(idObj, "Envelope must contain OBJECT_ID (key 1)");
          assertTrue(((Number) idObj).longValue() > 0, "OBJECT_ID must be positive");
 
-         // --- CLASS_NAME ---
          Object className = get(env, FieldIds.CLASS_NAME);
          assertNotNull(className, "Envelope must contain CLASS_NAME (key 2)");
          assertEquals(Node.class.getName(), className, "CLASS_NAME must be Node's fully-qualified binary name");
 
-         // --- VALUE ---
          Object value = get(env, FieldIds.VALUE);
          assertNotNull(value, "Envelope must contain VALUE (key 3)");
          assertInstanceOf(Map.class, value, "VALUE must be a Map for a POJO");
@@ -565,7 +509,7 @@ class EnvelopeSerializerTest {
       @DisplayName("two distinct instances produce different objectIds even with identical content")
       void twoDistinctInstancesProduceDifferentObjectIds() throws Exception {
          Node n1 = new Node("same-label");
-         Node n2 = new Node("same-label"); // equal content, different instance
+         Node n2 = new Node("same-label");
 
          long id1 = objectId(cborToMap(toCbor(n1)));
          long id2 = objectId(cborToMap(toCbor(n2)));
@@ -582,7 +526,7 @@ class EnvelopeSerializerTest {
          Node root = new Node("root");
          Node child = new Node("child");
          root.next = child;
-         child.next = root; // child.next back-references root
+         child.next = root;
 
          Map<Object, Object> rootEnv = cborToMap(toCbor(root));
          long rootId = objectId(rootEnv);
