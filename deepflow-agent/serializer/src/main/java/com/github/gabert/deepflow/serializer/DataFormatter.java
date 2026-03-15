@@ -3,12 +3,9 @@ package com.github.gabert.deepflow.serializer;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
-import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class DataFormatter {
-    private static final String DELIMITER = ";";
     private static final String METHOD_FORMAT = "%s.%s(%s) -> %s [%s]";
 
     public static String formatClassName(Class<?> clazz) {
@@ -38,25 +35,5 @@ public class DataFormatter {
                 argumentTypes,
                 formatClassName(returnType),
                 modifiers);
-    }
-
-    public static String formatLine(String tag, Object data) {
-        return tag + DELIMITER + data.toString() + "\n";
-    }
-
-    public static class ExceptionInfo {
-        private final String message;
-        private final List<String> stacktrace;
-
-        public ExceptionInfo(Throwable exception) {
-            this.message = exception.getMessage();
-            this.stacktrace = getStackTraceAsString(exception);
-        }
-
-        private List<String> getStackTraceAsString(Throwable exception) {
-            return Stream.of(exception.getStackTrace())
-                    .map(StackTraceElement::toString)
-                    .toList();
-        }
     }
 }

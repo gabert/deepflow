@@ -62,11 +62,6 @@
                                     <pattern>com.fasterxml.jackson</pattern>
                                     <shadedPattern>com.github.gabert.deepflow.shaded.com.fasterxml.jackson</shadedPattern>
                                 </relocation>
-                                <!-- Gson -->
-                                <relocation>
-                                    <pattern>com.google.gson</pattern>
-                                    <shadedPattern>com.github.gabert.deepflow.shaded.com.google.gson</shadedPattern>
-                                </relocation>
                                 <!-- ByteBuddy -->
                                 <relocation>
                                     <pattern>net.bytebuddy</pattern>

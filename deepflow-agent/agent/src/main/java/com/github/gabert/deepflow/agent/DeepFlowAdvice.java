@@ -7,7 +7,6 @@ import com.github.gabert.deepflow.recorder.RecordDrainer;
 import com.github.gabert.deepflow.recorder.RecordWriter;
 import com.github.gabert.deepflow.recorder.UnboundedRecordBuffer;
 import com.github.gabert.deepflow.serializer.DataFormatter;
-import com.github.gabert.deepflow.serializer.MethodLogger;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
@@ -24,7 +23,6 @@ import java.util.stream.Stream;
 
 public class DeepFlowAdvice {
     public static AgentConfig CONFIG;
-    public static MethodLogger METHOD_LOGGER;
     public static RecordBuffer RECORD_BUFFER;
     private static RecordDrainer RECORD_DRAINER;
     private static boolean EXPAND_THIS;
@@ -33,7 +31,6 @@ public class DeepFlowAdvice {
 
     public static void setup(AgentConfig agentConfig) {
         CONFIG = agentConfig;
-        METHOD_LOGGER = new MethodLogger(agentConfig.getDestination());
         setupRecorder(agentConfig);
     }
 
@@ -42,7 +39,6 @@ public class DeepFlowAdvice {
                                @Advice.This(optional = true) Object self,
                                @Advice.AllArguments Object[] allArguments) {
 
-        METHOD_LOGGER.logEntry(method, allArguments);
         recordEntry(method, self, allArguments);
     }
 
@@ -51,7 +47,6 @@ public class DeepFlowAdvice {
                               @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returned,
                               @Advice.Thrown Throwable throwable) {
 
-        METHOD_LOGGER.logExit(method, returned, throwable);
         recordExit(method, returned, throwable);
     }
 
