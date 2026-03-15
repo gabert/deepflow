@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.serializer.cbor;
+package com.github.gabert.deepflow.codec;
 
 import java.io.ByteArrayOutputStream;
 import java.io.Serial;

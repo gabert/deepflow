@@ -23,6 +23,11 @@
             <artifactId>DeepFlowSerializer</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
+        <dependency>
+            <groupId>com.github.gabert</groupId>
+            <artifactId>DeepFlowCodec</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
 

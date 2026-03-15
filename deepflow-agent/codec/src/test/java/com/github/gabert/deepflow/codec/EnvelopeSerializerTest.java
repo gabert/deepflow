@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.serializer.cbor;
+package com.github.gabert.deepflow.codec;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,11 +23,11 @@ import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
  * JUnit 5 tests for {@link ObjectIdRegistry}, {@link ClassNameCache}, and {@link EnvelopeSerializer}.
  *
  * <h2>Package access</h2> All production classes under test are package-private. These tests live in the same package
- * ({@code org.example.fin}) so no reflection is needed to access them — except for the one test that deliberately
- * probes a private field of {@link ObjectIdRegistry.IdentityWeakRef} to simulate a hash collision.
+ * ({@code com.github.gabert.deepflow.codec}) so no reflection is needed to access them — except for the one test that
+ * deliberately probes a private field of {@link ObjectIdRegistry.IdentityWeakRef} to simulate a hash collision.
  *
  * <h2>CBOR field key constants (from {@link FieldIds})</h2>
- * 
+ *
  * <pre>
  *   1 = OBJECT_ID    unique stable id for this object instance
  *   2 = CLASS_NAME   runtime fully-qualified class name

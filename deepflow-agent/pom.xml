@@ -10,6 +10,7 @@
     <packaging>pom</packaging>
 
     <modules>
+        <module>codec</module>
         <module>serializer</module>
         <module>agent</module>
         <module>demo</module>
