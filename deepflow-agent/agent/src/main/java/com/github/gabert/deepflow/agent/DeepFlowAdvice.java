@@ -3,37 +3,30 @@ package com.github.gabert.deepflow.agent;
 import com.github.gabert.deepflow.codec.Codec;
 import com.github.gabert.deepflow.codec.envelope.ObjectIdRegistry;
 import com.github.gabert.deepflow.recorder.RecordBuffer;
-import com.github.gabert.deepflow.recorder.RecordDrainer;
 import com.github.gabert.deepflow.recorder.RecordWriter;
-import com.github.gabert.deepflow.recorder.UnboundedRecordBuffer;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
-import java.util.stream.Collectors;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DeepFlowAdvice {
     public static AgentConfig CONFIG;
     public static RecordBuffer RECORD_BUFFER;
-    private static RecordDrainer RECORD_DRAINER;
     private static boolean EXPAND_THIS;
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
     private static final ThreadLocal<Integer> CALL_DEPTH = ThreadLocal.withInitial(() -> 0);
 
-    public static void setup(AgentConfig agentConfig) {
-        CONFIG = agentConfig;
-        setupRecorder(agentConfig);
+    public static void setup(AgentConfig config) {
+        CONFIG = config;
+        EXPAND_THIS = config.isExpandThis();
+        RecorderManager manager = RecorderManager.create(config);
+        RECORD_BUFFER = manager != null ? manager.getBuffer() : null;
     }
 
     @Advice.OnMethodEnter
@@ -50,47 +43,6 @@ public class DeepFlowAdvice {
                               @Advice.Thrown Throwable throwable) {
 
         recordExit(method, returned, throwable);
-    }
-
-    // --- Recorder setup ---
-
-    private static void setupRecorder(AgentConfig agentConfig) {
-        try {
-            String dumpLocation = agentConfig.getSessionDumpLocation();
-            String sessionId = agentConfig.getSessionId();
-
-            if (dumpLocation == null) {
-                System.err.println("session_dump_location not configured. Binary recording disabled.");
-                return;
-            }
-
-            Path sessionDir = Paths.get(dumpLocation, "SESSION-" + sessionId);
-            Files.createDirectories(sessionDir);
-            Path outputFile = sessionDir.resolve(sessionId + "-recorder.dft");
-
-            BufferedWriter writer = Files.newBufferedWriter(outputFile,
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-
-            EXPAND_THIS = agentConfig.isExpandThis();
-            RECORD_BUFFER = new UnboundedRecordBuffer();
-            RECORD_DRAINER = new RecordDrainer(RECORD_BUFFER, writer);
-            RECORD_DRAINER.start();
-
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                RECORD_DRAINER.stop();
-                try {
-                    writer.close();
-                } catch (IOException e) {
-                    System.err.println("Error closing recorder writer.");
-                    e.printStackTrace();
-                }
-            }));
-        } catch (Exception e) {
-            System.err.println("Failed to initialize recorder. Binary recording disabled.");
-            e.printStackTrace();
-            RECORD_BUFFER = null;
-            RECORD_DRAINER = null;
-        }
     }
 
     // --- Record entry ---
