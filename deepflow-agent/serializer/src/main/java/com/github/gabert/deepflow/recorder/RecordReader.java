@@ -59,13 +59,20 @@ public final class RecordReader {
         long timestamp = getLong(payload, pos);
         pos += RecordType.TIMESTAMP_SIZE;
         int callerLine = getInt(payload, pos);
-        return new MethodStartData(signature, threadName, timestamp, callerLine);
+        pos += RecordType.CALLER_LINE_SIZE;
+        int depth = getInt(payload, pos);
+        return new MethodStartData(signature, threadName, timestamp, callerLine, depth);
     }
 
     public static MethodEndData decodeMethodEnd(Record record) {
         byte[] payload = record.payload();
-        long timestamp = getLong(payload, 0);
-        return new MethodEndData(timestamp);
+        int pos = 0;
+        int threadLen = getShort(payload, pos);
+        pos += RecordType.THREAD_NAME_LENGTH_SIZE;
+        String threadName = new String(payload, pos, threadLen, StandardCharsets.UTF_8);
+        pos += threadLen;
+        long timestamp = getLong(payload, pos);
+        return new MethodEndData(timestamp, threadName);
     }
 
     // --- Binary field readers ---
@@ -82,7 +89,7 @@ public final class RecordReader {
              | (buf[pos + 3] & 0xFF);
     }
 
-    private static long getLong(byte[] buf, int pos) {
+    static long getLong(byte[] buf, int pos) {
         return ((long)(buf[pos] & 0xFF) << 56)
              | ((long)(buf[pos + 1] & 0xFF) << 48)
              | ((long)(buf[pos + 2] & 0xFF) << 40)

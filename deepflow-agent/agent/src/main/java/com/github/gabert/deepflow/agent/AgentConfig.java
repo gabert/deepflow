@@ -14,6 +14,9 @@ public class AgentConfig {
     private final List<String> matchersExclude = new ArrayList<>();
 
     private final Destination destination;
+    private final String sessionDumpLocation;
+    private final String sessionId;
+    private final boolean expandThis;
 
     private AgentConfig(Map<String, String> configMap) {
         String matcherInclude = configMap.getOrDefault("matchers_include", "com.,org.");
@@ -26,11 +29,12 @@ public class AgentConfig {
                 .map(String::trim)
                 .toList());
 
+        this.sessionDumpLocation = configMap.get("session_dump_location");
+        this.sessionId = generateSessionId();
+        this.expandThis = Boolean.parseBoolean(configMap.getOrDefault("expand_this", "false"));
+
         String destinationTypeConfig = configMap.get("destination").toUpperCase();
-
         DestinationType destinationType = DestinationType.fromString(destinationTypeConfig);
-
-        String sessionId = generateSessionId();
         this.destination = destinationType.createDestination(configMap, sessionId);
     }
 
@@ -44,6 +48,18 @@ public class AgentConfig {
 
     public Destination getDestination() {
         return destination;
+    }
+
+    public String getSessionDumpLocation() {
+        return sessionDumpLocation;
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public boolean isExpandThis() {
+        return expandThis;
     }
 
     public static AgentConfig getInstance(String agentArgs) throws IOException {

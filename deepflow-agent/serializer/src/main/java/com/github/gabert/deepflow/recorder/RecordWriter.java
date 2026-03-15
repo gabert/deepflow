@@ -10,33 +10,43 @@ public final class RecordWriter {
     // --- Public API ---
 
     public static byte[] logEntry(String signature, String threadName, long timestamp,
-                                  int callerLine, byte[] argsCbor) {
-        byte[] start = methodStart(signature, threadName, timestamp, callerLine);
+                                  int callerLine, int depth, byte[] thisInstanceCbor, byte[] argsCbor) {
+        byte[] start = methodStart(signature, threadName, timestamp, callerLine, depth);
+        byte[] thisInst = thisInstanceCbor != null ? thisInstance(thisInstanceCbor) : EMPTY_PAYLOAD;
         byte[] args = arguments(argsCbor);
-        return concat(start, args);
+        return concat(start, concat(thisInst, args));
     }
 
-    public static byte[] logExit(long timestamp, byte[] returnCbor, boolean isVoid) {
+    public static byte[] logEntryWithThisRef(String signature, String threadName, long timestamp,
+                                             int callerLine, int depth, long thisInstanceId, byte[] argsCbor) {
+        byte[] start = methodStart(signature, threadName, timestamp, callerLine, depth);
+        byte[] thisRef = thisInstanceRef(thisInstanceId);
+        byte[] args = arguments(argsCbor);
+        return concat(start, concat(thisRef, args));
+    }
+
+    public static byte[] logExit(String threadName, long timestamp, byte[] returnCbor, boolean isVoid) {
         byte[] ret = isVoid ? returnVoid() : returnValue(returnCbor);
-        byte[] end = methodEnd(timestamp);
+        byte[] end = methodEnd(threadName, timestamp);
         return concat(ret, end);
     }
 
-    public static byte[] logExitException(long timestamp, byte[] exceptionCbor) {
+    public static byte[] logExitException(String threadName, long timestamp, byte[] exceptionCbor) {
         byte[] exc = exception(exceptionCbor);
-        byte[] end = methodEnd(timestamp);
+        byte[] end = methodEnd(threadName, timestamp);
         return concat(exc, end);
     }
 
     // --- logEntry internals ---
 
     private static byte[] methodStart(String signature, String threadName,
-                                       long timestamp, int callerLine) {
+                                       long timestamp, int callerLine, int depth) {
         byte[] sigBytes = signature.getBytes(StandardCharsets.UTF_8);
         byte[] threadBytes = threadName.getBytes(StandardCharsets.UTF_8);
         byte[] payload = new byte[RecordType.SIGNATURE_LENGTH_SIZE + sigBytes.length
                                 + RecordType.THREAD_NAME_LENGTH_SIZE + threadBytes.length
-                                + RecordType.TIMESTAMP_SIZE + RecordType.CALLER_LINE_SIZE];
+                                + RecordType.TIMESTAMP_SIZE + RecordType.CALLER_LINE_SIZE
+                                + RecordType.CALL_DEPTH_SIZE];
         int pos = 0;
         pos = putShort(payload, pos, (short) sigBytes.length);
         System.arraycopy(sigBytes, 0, payload, pos, sigBytes.length);
@@ -45,8 +55,19 @@ public final class RecordWriter {
         System.arraycopy(threadBytes, 0, payload, pos, threadBytes.length);
         pos += threadBytes.length;
         pos = putLong(payload, pos, timestamp);
-        putInt(payload, pos, callerLine);
+        pos = putInt(payload, pos, callerLine);
+        putInt(payload, pos, depth);
         return frame(RecordType.METHOD_START, payload);
+    }
+
+    private static byte[] thisInstance(byte[] thisCbor) {
+        return frame(RecordType.THIS_INSTANCE, thisCbor);
+    }
+
+    private static byte[] thisInstanceRef(long objectId) {
+        byte[] payload = new byte[Long.BYTES];
+        putLong(payload, 0, objectId);
+        return frame(RecordType.THIS_INSTANCE_REF, payload);
     }
 
     private static byte[] arguments(byte[] argsCbor) {
@@ -67,9 +88,15 @@ public final class RecordWriter {
         return frame(RecordType.EXCEPTION, exceptionCbor);
     }
 
-    private static byte[] methodEnd(long timestamp) {
-        byte[] payload = new byte[RecordType.TIMESTAMP_SIZE];
-        putLong(payload, 0, timestamp);
+    private static byte[] methodEnd(String threadName, long timestamp) {
+        byte[] threadBytes = threadName.getBytes(StandardCharsets.UTF_8);
+        byte[] payload = new byte[RecordType.THREAD_NAME_LENGTH_SIZE + threadBytes.length
+                                + RecordType.TIMESTAMP_SIZE];
+        int pos = 0;
+        pos = putShort(payload, pos, (short) threadBytes.length);
+        System.arraycopy(threadBytes, 0, payload, pos, threadBytes.length);
+        pos += threadBytes.length;
+        putLong(payload, pos, timestamp);
         return frame(RecordType.METHOD_END, payload);
     }
 

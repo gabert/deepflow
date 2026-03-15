@@ -22,7 +22,7 @@ class RecordWriterReaderTest {
         byte[] argsCbor = Codec.encode(new Object[]{"arg1", 42});
         long ts = System.currentTimeMillis();
 
-        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, ts, 99, argsCbor);
+        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, ts, 99, 0, null, argsCbor);
 
         List<Record> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
@@ -34,6 +34,7 @@ class RecordWriterReaderTest {
         assertEquals(THREAD, meta.threadName);
         assertEquals(ts, meta.timestamp);
         assertEquals(99, meta.callerLine);
+        assertEquals(0, meta.depth);
 
         assertArrayEquals(argsCbor, records.get(1).payload());
     }
@@ -45,7 +46,7 @@ class RecordWriterReaderTest {
         byte[] retCbor = Codec.encode("returned");
         long ts = System.currentTimeMillis();
 
-        byte[] data = RecordWriter.logExit(ts, retCbor, false);
+        byte[] data = RecordWriter.logExit(THREAD, ts, retCbor, false);
 
         List<Record> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
@@ -56,6 +57,7 @@ class RecordWriterReaderTest {
 
         MethodEndData meta = RecordReader.decodeMethodEnd(records.get(1));
         assertEquals(ts, meta.timestamp);
+        assertEquals(THREAD, meta.threadName);
     }
 
     // --- logExit (void) ---
@@ -64,7 +66,7 @@ class RecordWriterReaderTest {
     void logExitVoidHasEmptyReturnPayload() {
         long ts = System.currentTimeMillis();
 
-        byte[] data = RecordWriter.logExit(ts, null, true);
+        byte[] data = RecordWriter.logExit(THREAD, ts, null, true);
 
         List<Record> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
@@ -80,7 +82,7 @@ class RecordWriterReaderTest {
         byte[] excCbor = Codec.encode(Map.of("message", "NPE"));
         long ts = System.currentTimeMillis();
 
-        byte[] data = RecordWriter.logExitException(ts, excCbor);
+        byte[] data = RecordWriter.logExitException(THREAD, ts, excCbor);
 
         List<Record> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
@@ -91,6 +93,7 @@ class RecordWriterReaderTest {
 
         MethodEndData meta = RecordReader.decodeMethodEnd(records.get(1));
         assertEquals(ts, meta.timestamp);
+        assertEquals(THREAD, meta.threadName);
     }
 
     // --- Full method trace ---
@@ -102,8 +105,8 @@ class RecordWriterReaderTest {
         byte[] argsCbor = Codec.encode(new Object[]{"x", 1});
         byte[] retCbor = Codec.encode(42);
 
-        byte[] entry = RecordWriter.logEntry(SIGNATURE, THREAD, tsStart, 10, argsCbor);
-        byte[] exit = RecordWriter.logExit(tsEnd, retCbor, false);
+        byte[] entry = RecordWriter.logEntry(SIGNATURE, THREAD, tsStart, 10, 0, null, argsCbor);
+        byte[] exit = RecordWriter.logExit(THREAD, tsEnd, retCbor, false);
 
         byte[] stream = concat(entry, exit);
 
@@ -118,6 +121,7 @@ class RecordWriterReaderTest {
         MethodEndData endMeta = RecordReader.decodeMethodEnd(records.get(3));
         assertEquals(tsStart, startMeta.timestamp);
         assertEquals(tsEnd, endMeta.timestamp);
+        assertEquals(THREAD, endMeta.threadName);
     }
 
     @Test
@@ -127,8 +131,8 @@ class RecordWriterReaderTest {
         byte[] argsCbor = Codec.encode(new Object[]{"input"});
         byte[] excCbor = Codec.encode(Map.of("message", "fail", "stacktrace", List.of("at X.y(X.java:5)")));
 
-        byte[] entry = RecordWriter.logEntry(SIGNATURE, THREAD, tsStart, 20, argsCbor);
-        byte[] exit = RecordWriter.logExitException(tsEnd, excCbor);
+        byte[] entry = RecordWriter.logEntry(SIGNATURE, THREAD, tsStart, 20, 0, null, argsCbor);
+        byte[] exit = RecordWriter.logExitException(THREAD, tsEnd, excCbor);
 
         byte[] stream = concat(entry, exit);
 
@@ -141,6 +145,7 @@ class RecordWriterReaderTest {
 
         MethodEndData endMeta = RecordReader.decodeMethodEnd(records.get(3));
         assertEquals(tsEnd, endMeta.timestamp);
+        assertEquals(THREAD, endMeta.threadName);
     }
 
     @Test
@@ -155,10 +160,10 @@ class RecordWriterReaderTest {
         byte[] innerArgs = Codec.encode(new Object[]{"data"});
         byte[] innerRet = Codec.encode(1);
 
-        byte[] entryOuter = RecordWriter.logEntry(sigOuter, "http-handler-1", ts1, 10, outerArgs);
-        byte[] entryInner = RecordWriter.logEntry(sigInner, "http-handler-1", ts2, 20, innerArgs);
-        byte[] exitInner = RecordWriter.logExit(ts3, innerRet, false);
-        byte[] exitOuter = RecordWriter.logExit(ts4, null, true);
+        byte[] entryOuter = RecordWriter.logEntry(sigOuter, "http-handler-1", ts1, 10, 0, null, outerArgs);
+        byte[] entryInner = RecordWriter.logEntry(sigInner, "http-handler-1", ts2, 20, 1, null, innerArgs);
+        byte[] exitInner = RecordWriter.logExit("http-handler-1", ts3, innerRet, false);
+        byte[] exitOuter = RecordWriter.logExit("http-handler-1", ts4, null, true);
 
         byte[] stream = concat(entryOuter, entryInner, exitInner, exitOuter);
 
@@ -178,19 +183,25 @@ class RecordWriterReaderTest {
         assertEquals(RecordType.RETURN, records.get(6).type());
         assertEquals(RecordType.METHOD_END, records.get(7).type());
 
-        // Verify signatures and thread names
+        // Verify signatures, thread names, and depth
         MethodStartData outer = RecordReader.decodeMethodStart(records.get(0));
         MethodStartData inner = RecordReader.decodeMethodStart(records.get(2));
         assertEquals(sigOuter, outer.signature);
         assertEquals(sigInner, inner.signature);
         assertEquals("http-handler-1", outer.threadName);
         assertEquals("http-handler-1", inner.threadName);
+        assertEquals(0, outer.depth);
+        assertEquals(1, inner.depth);
 
         // Verify timestamps
         assertEquals(ts1, outer.timestamp);
         assertEquals(ts2, inner.timestamp);
         assertEquals(ts3, RecordReader.decodeMethodEnd(records.get(5)).timestamp);
         assertEquals(ts4, RecordReader.decodeMethodEnd(records.get(7)).timestamp);
+
+        // Verify thread name in METHOD_END
+        assertEquals("http-handler-1", RecordReader.decodeMethodEnd(records.get(5)).threadName);
+        assertEquals("http-handler-1", RecordReader.decodeMethodEnd(records.get(7)).threadName);
 
         // Inner return has payload, outer return is void
         assertTrue(records.get(4).payload().length > 0);
@@ -201,7 +212,7 @@ class RecordWriterReaderTest {
 
     @Test
     void readAllFromInputStream() throws Exception {
-        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, Codec.encode(new Object[]{}));
+        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, 0, null, Codec.encode(new Object[]{}));
 
         List<Record> records = RecordReader.readAll(new ByteArrayInputStream(data));
         assertEquals(2, records.size());
@@ -216,7 +227,7 @@ class RecordWriterReaderTest {
 
     @Test
     void truncatedFrameThrows() throws Exception {
-        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, Codec.encode(new Object[]{"x"}));
+        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, 0, null, Codec.encode(new Object[]{"x"}));
         byte[] chopped = Arrays.copyOf(data, data.length - 1);
         assertThrows(IllegalArgumentException.class, () -> RecordReader.readAll(chopped));
     }
@@ -226,7 +237,7 @@ class RecordWriterReaderTest {
         byte[] bigArgs = new byte[100_000];
         Arrays.fill(bigArgs, (byte) 0x42);
 
-        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, bigArgs);
+        byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, 0, null, bigArgs);
 
         List<Record> records = RecordReader.readAll(data);
         assertEquals(2, records.size());

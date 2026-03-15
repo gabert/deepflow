@@ -17,6 +17,9 @@ public final class ClassNameCache extends ClassValue<String> {
 
    @Override
    protected String computeValue(Class<?> c) {
+      if (c.isArray()) {
+         return computeValue(c.getComponentType()) + "[]";
+      }
       return c.getName();
    }
 }

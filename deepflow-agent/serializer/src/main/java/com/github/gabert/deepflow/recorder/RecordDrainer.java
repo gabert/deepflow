@@ -1,9 +1,11 @@
 package com.github.gabert.deepflow.recorder;
 
 import com.github.gabert.deepflow.codec.Codec;
+import com.github.gabert.deepflow.codec.envelope.FieldIds;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.util.Map;
 
 /**
  * Drains records from a {@link RecordBuffer} and writes them as human-readable
@@ -86,24 +88,37 @@ public final class RecordDrainer {
 
     private void renderRecord(Record record) throws IOException {
         switch (record.type()) {
-            case RecordType.METHOD_START -> renderMethodStart(record);
-            case RecordType.ARGUMENTS   -> renderArguments(record);
-            case RecordType.RETURN      -> renderReturn(record);
-            case RecordType.EXCEPTION   -> renderException(record);
-            case RecordType.METHOD_END  -> renderMethodEnd(record);
+            case RecordType.METHOD_START      -> renderMethodStart(record);
+            case RecordType.THIS_INSTANCE     -> renderThisInstance(record);
+            case RecordType.THIS_INSTANCE_REF -> renderThisInstanceRef(record);
+            case RecordType.ARGUMENTS         -> renderArguments(record);
+            case RecordType.RETURN            -> renderReturn(record);
+            case RecordType.EXCEPTION         -> renderException(record);
+            case RecordType.METHOD_END        -> renderMethodEnd(record);
         }
     }
 
     private void renderMethodStart(Record record) throws IOException {
         MethodStartData meta = RecordReader.decodeMethodStart(record);
         writeLine("MS", meta.signature);
-        writeLine("TH", meta.threadName);
+        writeLine("TN", meta.threadName);
+        writeLine("CD", String.valueOf(meta.depth));
         writeLine("TS", String.valueOf(meta.timestamp));
         writeLine("CL", String.valueOf(meta.callerLine));
     }
 
-    private void renderArguments(Record record) throws IOException {
+    private void renderThisInstance(Record record) throws IOException {
         String json = decodeCborPayload(record.payload());
+        writeLine("TI", json);
+    }
+
+    private void renderThisInstanceRef(Record record) throws IOException {
+        long objectId = RecordReader.getLong(record.payload(), 0);
+        writeLine("TI", String.valueOf(objectId));
+    }
+
+    private void renderArguments(Record record) throws IOException {
+        String json = decodeArgumentsPayload(record.payload());
         writeLine("AR", json);
     }
 
@@ -125,8 +140,8 @@ public final class RecordDrainer {
 
     private void renderMethodEnd(Record record) throws IOException {
         MethodEndData meta = RecordReader.decodeMethodEnd(record);
+        writeLine("TN", meta.threadName);
         writeLine("TE", String.valueOf(meta.timestamp));
-        writeLine("ME", "");
     }
 
     // --- Utilities ---
@@ -138,10 +153,34 @@ public final class RecordDrainer {
         writer.write('\n');
     }
 
+    private String decodeArgumentsPayload(byte[] payload) {
+        try {
+            Object decoded = Codec.decode(payload);
+            if (decoded instanceof Map<?, ?> envelope) {
+                Object args = getEnvelopeValue(envelope, FieldIds.VALUE);
+                if (args != null) {
+                    return Codec.toReadableJson(args);
+                }
+            }
+            return Codec.toReadableJson(decoded);
+        } catch (IOException e) {
+            return "<decode error: " + e.getMessage() + ">";
+        }
+    }
+
+    private Object getEnvelopeValue(Map<?, ?> envelope, int fieldId) {
+        // CBOR decoder may return keys as Integer or String
+        Object value = envelope.get(fieldId);
+        if (value == null) {
+            value = envelope.get(String.valueOf(fieldId));
+        }
+        return value;
+    }
+
     private String decodeCborPayload(byte[] payload) {
         try {
             Object decoded = Codec.decode(payload);
-            return Codec.toJson(decoded);
+            return Codec.toReadableJson(decoded);
         } catch (IOException e) {
             return "<decode error: " + e.getMessage() + ">";
         }
