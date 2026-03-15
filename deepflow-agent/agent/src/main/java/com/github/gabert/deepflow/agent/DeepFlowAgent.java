@@ -24,8 +24,10 @@ public class DeepFlowAgent {
 
         try {
             agentConfig = AgentConfig.getInstance(agentArgs);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (Exception e) {
+            System.err.println("Failed to load agent config. Agent disabled.");
+            e.printStackTrace();
+            return;
         }
 
         DeepFlowAdvice.setup(agentConfig);

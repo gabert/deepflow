@@ -49,11 +49,16 @@ public final class RecordDrainer {
 
     private void drainLoop() {
         while (running) {
-            byte[] record = buffer.poll();
-            if (record != null) {
-                writeRecord(record);
-            } else {
-                Thread.onSpinWait();
+            try {
+                byte[] record = buffer.poll();
+                if (record != null) {
+                    writeRecord(record);
+                } else {
+                    Thread.onSpinWait();
+                }
+            } catch (Throwable t) {
+                System.err.println("Error in drain loop, skipping record.");
+                t.printStackTrace();
             }
         }
     }

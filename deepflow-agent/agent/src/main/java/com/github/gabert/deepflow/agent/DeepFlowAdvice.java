@@ -72,9 +72,9 @@ public class DeepFlowAdvice {
                 record = RecordWriter.logEntry(signature, threadName, timestamp, callerLine, depth, null, argsCbor);
             }
             RECORD_BUFFER.offer(record);
-        } catch (Exception e) {
+        } catch (Throwable t) {
             System.err.println("Error recording entry.");
-            e.printStackTrace();
+            t.printStackTrace();
         }
     }
 
@@ -97,9 +97,9 @@ public class DeepFlowAdvice {
                 byte[] record = RecordWriter.logExit(threadName, timestamp, returnCbor, isVoid);
                 RECORD_BUFFER.offer(record);
             }
-        } catch (Exception e) {
+        } catch (Throwable t) {
             System.err.println("Error recording exit.");
-            e.printStackTrace();
+            t.printStackTrace();
         }
     }
 
