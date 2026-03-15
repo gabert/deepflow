@@ -14,6 +14,7 @@ import java.security.ProtectionDomain;
 
 public class DeepFlowAgent {
     private static final String AGENT_DEFAULT_EXCLUDE_PACKAGE = "com.github.gabert.deepflow.serializer";
+    private static final String AGENT_SHADED_EXCLUDE_PACKAGE = "com.github.gabert.deepflow.shaded";
 
     public static void premain(String agentArgs,
                                Instrumentation instrumentation) {
@@ -42,6 +43,7 @@ public class DeepFlowAgent {
 
         ElementMatcher.Junction<TypeDescription> matcherAgentPackage =
                 ElementMatchers.nameStartsWith(AGENT_DEFAULT_EXCLUDE_PACKAGE)
+                        .or(ElementMatchers.nameStartsWith(AGENT_SHADED_EXCLUDE_PACKAGE))
                         .or(ElementMatchers.nameContains("$$"));
 
 
