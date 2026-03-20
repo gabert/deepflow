@@ -213,6 +213,40 @@ JSON string, replacing integer envelope keys with descriptive names:
 | `4`         | `"ref_id"`   |
 | `5`         | `"cycle_ref"`|
 
+## Dependency shading
+
+The agent is packaged as a single fat JAR (`deepflow-agent.jar`) via
+`maven-shade-plugin`. Because the agent is loaded into the target application's
+JVM via `-javaagent`, its dependencies share the same classloader namespace as
+the application's own dependencies. Without shading, version conflicts would
+occur if the target application uses a different version of Jackson or
+ByteBuddy.
+
+The shade plugin **relocates** all third-party packages into the agent's own
+namespace:
+
+| Original package         | Shaded to                                                  |
+|--------------------------|------------------------------------------------------------|
+| `com.fasterxml.jackson`  | `com.github.gabert.deepflow.shaded.com.fasterxml.jackson`  |
+| `net.bytebuddy`          | `com.github.gabert.deepflow.shaded.net.bytebuddy`          |
+
+This means:
+
+- The agent's Jackson (used by the codec for CBOR serialization) is completely
+  isolated from any Jackson version the target application may use.
+- The agent's ByteBuddy (used for bytecode instrumentation) is isolated from
+  any ByteBuddy version the target application may use.
+- All internal references are rewritten at build time — no runtime class
+  loading tricks are needed.
+
+The shading is configured in `agent/pom.xml`. The `codec`, `record-format`, and
+`serializer` modules are bundled as-is (not relocated) since their packages
+(`com.github.gabert.deepflow.*`) are already unique and unlikely to conflict.
+
+Signature files (`META-INF/*.SF`, `*.DSA`, `*.RSA`) are excluded from the
+shaded JAR to prevent signature verification failures from repackaged
+dependencies.
+
 ## Example: full encoded method arguments
 
 Given a Java method call `foo("hello", myPerson)` where `myPerson` is a
