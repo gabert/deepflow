@@ -1,5 +1,7 @@
 package com.github.gabert.deepflow.recorder;
 
+import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
+import com.github.gabert.deepflow.recorder.buffer.UnboundedRecordBuffer;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

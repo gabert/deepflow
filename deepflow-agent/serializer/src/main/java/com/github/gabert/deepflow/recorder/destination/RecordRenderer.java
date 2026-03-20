@@ -1,9 +1,15 @@
-package com.github.gabert.deepflow.recorder;
+package com.github.gabert.deepflow.recorder.destination;
 
 import com.github.gabert.deepflow.codec.Codec;
 import com.github.gabert.deepflow.codec.envelope.FieldIds;
+import com.github.gabert.deepflow.recorder.record.MethodEndData;
+import com.github.gabert.deepflow.recorder.record.MethodStartData;
+import com.github.gabert.deepflow.recorder.record.RecordReader;
+import com.github.gabert.deepflow.recorder.record.RecordType;
 
 import java.io.IOException;
+
+import com.github.gabert.deepflow.recorder.record.TraceRecord;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -16,11 +22,11 @@ public final class RecordRenderer {
     public record Result(String threadName, List<String> lines) {}
 
     public static Result render(byte[] data) {
-        List<Record> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         List<String> lines = new ArrayList<>();
         String threadName = null;
 
-        for (Record record : records) {
+        for (TraceRecord record : records) {
             switch (record.type()) {
                 case RecordType.METHOD_START -> {
                     MethodStartData meta = RecordReader.decodeMethodStart(record);

@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.recorder;
+package com.github.gabert.deepflow.recorder.record;
 
 public final class MethodStartData {
     public final String signature;

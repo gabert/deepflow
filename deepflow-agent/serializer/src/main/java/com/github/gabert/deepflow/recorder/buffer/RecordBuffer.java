@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.recorder;
+package com.github.gabert.deepflow.recorder.buffer;
 
 /**
  * Buffer for passing binary records from producer threads to a consumer (drain) thread.

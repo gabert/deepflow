@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.recorder;
+package com.github.gabert.deepflow.recorder.record;
 
 import java.nio.charset.StandardCharsets;
 

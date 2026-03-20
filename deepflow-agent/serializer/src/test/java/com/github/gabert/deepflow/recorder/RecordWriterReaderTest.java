@@ -1,6 +1,8 @@
 package com.github.gabert.deepflow.recorder;
 
 import com.github.gabert.deepflow.codec.Codec;
+import com.github.gabert.deepflow.recorder.record.*;
+import com.github.gabert.deepflow.recorder.record.TraceRecord;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -24,7 +26,7 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, ts, 99, 0, null, argsCbor);
 
-        List<Record> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
         assertEquals(RecordType.METHOD_START, records.get(0).type());
         assertEquals(RecordType.ARGUMENTS, records.get(1).type());
@@ -48,7 +50,7 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logExit(THREAD, ts, retCbor, false);
 
-        List<Record> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
         assertEquals(RecordType.RETURN, records.get(0).type());
         assertEquals(RecordType.METHOD_END, records.get(1).type());
@@ -68,7 +70,7 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logExit(THREAD, ts, null, true);
 
-        List<Record> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
         assertEquals(RecordType.RETURN, records.get(0).type());
         assertEquals(0, records.get(0).payload().length);
@@ -84,7 +86,7 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logExitException(THREAD, ts, excCbor);
 
-        List<Record> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
         assertEquals(RecordType.EXCEPTION, records.get(0).type());
         assertEquals(RecordType.METHOD_END, records.get(1).type());
@@ -110,7 +112,7 @@ class RecordWriterReaderTest {
 
         byte[] stream = concat(entry, exit);
 
-        List<Record> records = RecordReader.readAll(stream);
+        List<TraceRecord> records = RecordReader.readAll(stream);
         assertEquals(4, records.size());
         assertEquals(RecordType.METHOD_START, records.get(0).type());
         assertEquals(RecordType.ARGUMENTS, records.get(1).type());
@@ -136,7 +138,7 @@ class RecordWriterReaderTest {
 
         byte[] stream = concat(entry, exit);
 
-        List<Record> records = RecordReader.readAll(stream);
+        List<TraceRecord> records = RecordReader.readAll(stream);
         assertEquals(4, records.size());
         assertEquals(RecordType.METHOD_START, records.get(0).type());
         assertEquals(RecordType.ARGUMENTS, records.get(1).type());
@@ -167,7 +169,7 @@ class RecordWriterReaderTest {
 
         byte[] stream = concat(entryOuter, entryInner, exitInner, exitOuter);
 
-        List<Record> records = RecordReader.readAll(stream);
+        List<TraceRecord> records = RecordReader.readAll(stream);
         assertEquals(8, records.size());
 
         // entry outer: METHOD_START + ARGUMENTS
@@ -214,14 +216,14 @@ class RecordWriterReaderTest {
     void readAllFromInputStream() throws Exception {
         byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, 0, null, Codec.encode(new Object[]{}));
 
-        List<Record> records = RecordReader.readAll(new ByteArrayInputStream(data));
+        List<TraceRecord> records = RecordReader.readAll(new ByteArrayInputStream(data));
         assertEquals(2, records.size());
         assertEquals(RecordType.METHOD_START, records.get(0).type());
     }
 
     @Test
     void emptyInputReturnsEmptyList() {
-        List<Record> records = RecordReader.readAll(new byte[0]);
+        List<TraceRecord> records = RecordReader.readAll(new byte[0]);
         assertTrue(records.isEmpty());
     }
 
@@ -239,7 +241,7 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logEntry(SIGNATURE, THREAD, 1000L, 1, 0, null, bigArgs);
 
-        List<Record> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
         assertArrayEquals(bigArgs, records.get(1).payload());
     }

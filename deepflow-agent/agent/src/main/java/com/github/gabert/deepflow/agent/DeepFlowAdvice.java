@@ -2,8 +2,8 @@ package com.github.gabert.deepflow.agent;
 
 import com.github.gabert.deepflow.codec.Codec;
 import com.github.gabert.deepflow.codec.envelope.ObjectIdRegistry;
-import com.github.gabert.deepflow.recorder.RecordBuffer;
-import com.github.gabert.deepflow.recorder.RecordWriter;
+import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
+import com.github.gabert.deepflow.recorder.record.RecordWriter;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 

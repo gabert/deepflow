@@ -1,6 +1,10 @@
 package com.github.gabert.deepflow.agent;
 
-import com.github.gabert.deepflow.recorder.*;
+import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
+import com.github.gabert.deepflow.recorder.buffer.UnboundedRecordBuffer;
+import com.github.gabert.deepflow.recorder.destination.Destination;
+import com.github.gabert.deepflow.recorder.destination.RecordDrainer;
+import com.github.gabert.deepflow.recorder.destination.ZipDestination;
 
 import java.io.IOException;
 import java.util.Map;

@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.recorder;
+package com.github.gabert.deepflow.recorder.buffer;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 

@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.recorder;
+package com.github.gabert.deepflow.recorder.destination;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;

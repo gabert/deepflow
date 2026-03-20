@@ -1,4 +1,6 @@
-package com.github.gabert.deepflow.recorder;
+package com.github.gabert.deepflow.recorder.destination;
+
+import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
 
 import java.io.IOException;
 

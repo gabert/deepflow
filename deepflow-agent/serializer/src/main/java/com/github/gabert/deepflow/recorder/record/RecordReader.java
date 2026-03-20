@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.recorder;
+package com.github.gabert.deepflow.recorder.record;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,8 +13,8 @@ public final class RecordReader {
 
     // --- Public API ---
 
-    public static List<Record> readAll(byte[] data) {
-        List<Record> records = new ArrayList<>();
+    public static List<TraceRecord> readAll(byte[] data) {
+        List<TraceRecord> records = new ArrayList<>();
         int pos = 0;
         while (pos + RecordType.HEADER_SIZE <= data.length) {
             byte type = data[pos];
@@ -35,17 +35,17 @@ public final class RecordReader {
             }
 
             byte[] payload = Arrays.copyOfRange(data, pos, pos + length);
-            records.add(new Record(type, payload));
+            records.add(new TraceRecord(type, payload));
             pos += length;
         }
         return records;
     }
 
-    public static List<Record> readAll(InputStream in) throws IOException {
+    public static List<TraceRecord> readAll(InputStream in) throws IOException {
         return readAll(in.readAllBytes());
     }
 
-    public static MethodStartData decodeMethodStart(Record record) {
+    public static MethodStartData decodeMethodStart(TraceRecord record) {
         byte[] payload = record.payload();
         int pos = 0;
         int sigLen = getShort(payload, pos);
@@ -64,7 +64,7 @@ public final class RecordReader {
         return new MethodStartData(signature, threadName, timestamp, callerLine, depth);
     }
 
-    public static MethodEndData decodeMethodEnd(Record record) {
+    public static MethodEndData decodeMethodEnd(TraceRecord record) {
         byte[] payload = record.payload();
         int pos = 0;
         int threadLen = getShort(payload, pos);
@@ -89,7 +89,7 @@ public final class RecordReader {
              | (buf[pos + 3] & 0xFF);
     }
 
-    static long getLong(byte[] buf, int pos) {
+    public static long getLong(byte[] buf, int pos) {
         return ((long)(buf[pos] & 0xFF) << 56)
              | ((long)(buf[pos + 1] & 0xFF) << 48)
              | ((long)(buf[pos + 2] & 0xFF) << 40)

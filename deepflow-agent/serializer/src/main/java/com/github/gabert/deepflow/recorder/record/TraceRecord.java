@@ -1,10 +1,10 @@
-package com.github.gabert.deepflow.recorder;
+package com.github.gabert.deepflow.recorder.record;
 
-public final class Record {
+public final class TraceRecord {
     private final byte type;
     private final byte[] payload;
 
-    public Record(byte type, byte[] payload) {
+    public TraceRecord(byte type, byte[] payload) {
         this.type = type;
         this.payload = payload;
     }
@@ -19,7 +19,7 @@ public final class Record {
 
     @Override
     public String toString() {
-        return "Record{type=0x" + String.format("%02x", type)
+        return "TraceRecord{type=0x" + String.format("%02x", type)
                 + ", payloadLength=" + payload.length + "}";
     }
 }

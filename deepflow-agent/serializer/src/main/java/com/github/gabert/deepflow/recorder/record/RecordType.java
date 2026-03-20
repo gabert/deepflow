@@ -1,4 +1,4 @@
-package com.github.gabert.deepflow.recorder;
+package com.github.gabert.deepflow.recorder.record;
 
 public final class RecordType {
     public static final byte METHOD_START = 0x01;
