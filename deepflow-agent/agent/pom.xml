@@ -20,6 +20,11 @@
         </dependency>
         <dependency>
             <groupId>com.github.gabert</groupId>
+            <artifactId>DeepFlowRecordFormat</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.gabert</groupId>
             <artifactId>DeepFlowSerializer</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>

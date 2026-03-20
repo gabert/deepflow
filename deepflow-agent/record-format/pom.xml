@@ -10,18 +10,14 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>DeepFlowSerializer</artifactId>
+    <artifactId>DeepFlowRecordFormat</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>com.github.gabert</groupId>
-            <artifactId>DeepFlowRecordFormat</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.github.gabert</groupId>
             <artifactId>DeepFlowCodec</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

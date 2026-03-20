@@ -11,6 +11,7 @@
 
     <modules>
         <module>codec</module>
+        <module>record-format</module>
         <module>serializer</module>
         <module>agent</module>
         <module>demo</module>

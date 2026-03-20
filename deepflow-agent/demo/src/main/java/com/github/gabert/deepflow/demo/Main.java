@@ -3,7 +3,7 @@ package com.github.gabert.deepflow.demo;
 import java.util.Objects;
 
 public class Main {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         String name = "John";
         System.out.println(sayHelloTo(name));
         printAgeToConsole(name, calculateAge(2024,1986));
@@ -12,6 +12,14 @@ public class Main {
 
         printPerson(person);
 
+        Thread worker = new Thread(() -> {
+            Person p = createPerson("Jane", "Berlin");
+            printPerson(p);
+            p.address.town = "Munich";
+            printPerson(p);
+        }, "worker-thread");
+        worker.start();
+
         person.address.town = "Paris";
 
         printPerson(person);
@@ -19,6 +27,8 @@ public class Main {
         Person clonedPerson = person.clone();
 
         printPerson(clonedPerson);
+
+        worker.join();
     }
 
     private static String sayHelloTo(String name) {
