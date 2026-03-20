@@ -13,6 +13,7 @@ public class AgentConfig {
     private final String sessionDumpLocation;
     private final String sessionId;
     private final boolean expandThis;
+    private final String destination;
 
     private AgentConfig(Map<String, String> configMap) {
         String matcherInclude = configMap.getOrDefault("matchers_include", "");
@@ -34,6 +35,7 @@ public class AgentConfig {
         this.sessionDumpLocation = configMap.get("session_dump_location");
         this.sessionId = generateSessionId();
         this.expandThis = Boolean.parseBoolean(configMap.getOrDefault("expand_this", "false"));
+        this.destination = configMap.getOrDefault("destination", "zip");
     }
 
     public List<String> getMatchersInclude() {
@@ -54,6 +56,10 @@ public class AgentConfig {
 
     public boolean isExpandThis() {
         return expandThis;
+    }
+
+    public String getDestination() {
+        return destination;
     }
 
     public static AgentConfig getInstance(String agentArgs) throws IOException {

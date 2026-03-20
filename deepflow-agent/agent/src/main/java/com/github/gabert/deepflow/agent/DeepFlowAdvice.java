@@ -131,6 +131,9 @@ public class DeepFlowAdvice {
     }
 
     private static String formatClassName(Class<?> clazz) {
+        if (clazz.isArray()) {
+            return formatClassName(clazz.getComponentType()) + "[]";
+        }
         String name = clazz.getName();
         int lastDot = name.lastIndexOf('.');
         if (lastDot != -1) {
