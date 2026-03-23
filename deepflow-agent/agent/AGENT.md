@@ -155,6 +155,8 @@ key=value
 | `matchers_exclude`     | (empty) | Comma-separated regexes of classes to exclude |
 | `destination`          | `zip`   | Output destination type                       |
 | `expand_this`          | `false` | If `true`, serialize full `this` object; if `false`, record only the object ID |
+| `session_resolver`     | (none)  | Name of the `SessionIdResolver` SPI to activate (see [SESSION_RESOLVER_SPI.md](../SESSION_RESOLVER_SPI.md)) |
+| `session_id`           | (none)  | Custom session ID — published as system property `deepflow.session_id` for the `config` resolver |
 
 ### Config resolution order
 
@@ -166,15 +168,23 @@ key=value
 Example:
 
 ```bash
-# File values from deepagent.cfg, but destination overridden to zip
-java -javaagent:agent.jar=config=deepagent.cfg&destination=zip ...
+# File values from deepagent.cfg, but destination overridden to file
+java -javaagent:agent.jar=config=deepagent.cfg&destination=file ...
 ```
 
 ### Session ID
 
-A session ID is auto-generated at agent startup in the format `yyyyMMdd-HHmmss`
-(e.g. `20260320-213331`). It is used by destinations to name output files and
-is not configurable.
+There are two distinct session ID concepts:
+
+**File-naming session ID** — auto-generated at startup in the format
+`yyyyMMdd-HHmmss` (e.g. `20260320-213331`). Used by destinations to name
+output files (e.g. `SESSION-20260320-213331/`). Not configurable.
+
+**Trace-record session ID** — injected into method entry records via the
+`SessionIdResolver` SPI. Configured by `session_resolver` (selects the
+resolver by name) and optionally `session_id` (value for the `config`
+resolver). See [SESSION_RESOLVER_SPI.md](../SESSION_RESOLVER_SPI.md) for
+the full guide.
 
 ## Dependency shading
 
@@ -200,6 +210,7 @@ as-is — their packages (`com.github.gabert.deepflow.*`) are unique.
 | `DeepFlowCodec`              | CBOR serialization of captured data  |
 | `DeepFlowRecordFormat`       | Binary wire format for trace records |
 | `DeepFlowSerializer`         | Buffer, drainer, and destinations    |
+| `SessionResolverApi`         | `SessionIdResolver` SPI interface    |
 | `jackson-databind`           | JSON/CBOR object mapping (shaded)    |
 | `jackson-dataformat-cbor`    | CBOR binary format support (shaded)  |
 | `byte-buddy`                 | Bytecode instrumentation (shaded)    |

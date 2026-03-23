@@ -13,6 +13,7 @@ import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
 
 public class DeepFlowAgent {
+    private static final String AGENT_PACKAGE = "com.github.gabert.deepflow.agent";
     private static final String AGENT_RECORDER_EXCLUDE_PACKAGE = "com.github.gabert.deepflow.recorder";
     private static final String AGENT_CODEC_EXCLUDE_PACKAGE = "com.github.gabert.deepflow.codec";
     private static final String AGENT_SHADED_EXCLUDE_PACKAGE = "com.github.gabert.deepflow.shaded";
@@ -49,7 +50,8 @@ public class DeepFlowAgent {
         }
 
         ElementMatcher.Junction<TypeDescription> matcherAgentPackage =
-                ElementMatchers.nameStartsWith(AGENT_RECORDER_EXCLUDE_PACKAGE)
+                ElementMatchers.nameStartsWith(AGENT_PACKAGE)
+                        .or(ElementMatchers.nameStartsWith(AGENT_RECORDER_EXCLUDE_PACKAGE))
                         .or(ElementMatchers.nameStartsWith(AGENT_CODEC_EXCLUDE_PACKAGE))
                         .or(ElementMatchers.nameStartsWith(AGENT_SHADED_EXCLUDE_PACKAGE))
                         .or(ElementMatchers.nameContains("$$"));
@@ -62,6 +64,8 @@ public class DeepFlowAgent {
                             JavaModule module,
                             ProtectionDomain pd) -> builder.visit(
                                     advice.on(ElementMatchers.isMethod()
+                                            .and(ElementMatchers.not(ElementMatchers.isGetter()))
+                                            .and(ElementMatchers.not(ElementMatchers.isSetter()))
                                             .and(ElementMatchers.not(ElementMatchers.named("toString")))
                                             .and(ElementMatchers.not(ElementMatchers.named("equals")))
                                             .and(ElementMatchers.not(ElementMatchers.named("hashCode"))))))

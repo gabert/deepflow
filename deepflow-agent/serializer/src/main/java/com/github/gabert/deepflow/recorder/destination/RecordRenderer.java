@@ -31,6 +31,9 @@ public final class RecordRenderer {
                 case RecordType.METHOD_START -> {
                     MethodStartData meta = RecordReader.decodeMethodStart(record);
                     threadName = meta.threadName;
+                    if (meta.sessionId != null) {
+                        lines.add(line("SI", meta.sessionId));
+                    }
                     lines.add(line("MS", meta.signature));
                     lines.add(line("TN", meta.threadName));
                     lines.add(line("CD", String.valueOf(meta.depth)));

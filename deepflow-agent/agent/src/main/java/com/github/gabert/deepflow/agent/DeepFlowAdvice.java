@@ -1,5 +1,6 @@
 package com.github.gabert.deepflow.agent;
 
+import com.github.gabert.deepflow.agent.session.SessionIdResolver;
 import com.github.gabert.deepflow.codec.Codec;
 import com.github.gabert.deepflow.codec.envelope.ObjectIdRegistry;
 import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
@@ -12,6 +13,7 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -19,6 +21,7 @@ public class DeepFlowAdvice {
     public static AgentConfig CONFIG;
     public static RecordBuffer RECORD_BUFFER;
     private static boolean EXPAND_THIS;
+    private static volatile SessionIdResolver SESSION_ID_RESOLVER;
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
     private static final ThreadLocal<Integer> CALL_DEPTH = ThreadLocal.withInitial(() -> 0);
 
@@ -60,17 +63,20 @@ public class DeepFlowAdvice {
                     .map(StackWalker.StackFrame::getLineNumber)
                     .orElse(0);
 
+            String sessionId = getResolver().resolve();
+
             byte[] argsCbor = Codec.encode(allArguments);
             byte[] record;
             if (self != null && EXPAND_THIS) {
                 byte[] thisInstanceCbor = Codec.encode(self);
-                record = RecordWriter.logEntry(signature, threadName, timestamp, callerLine, depth, thisInstanceCbor, argsCbor);
+                record = RecordWriter.logEntry(sessionId, signature, threadName, timestamp, callerLine, depth, thisInstanceCbor, argsCbor);
             } else if (self != null) {
                 long thisId = ObjectIdRegistry.idOf(self);
-                record = RecordWriter.logEntryWithThisRef(signature, threadName, timestamp, callerLine, depth, thisId, argsCbor);
+                record = RecordWriter.logEntryWithThisRef(sessionId, signature, threadName, timestamp, callerLine, depth, thisId, argsCbor);
             } else {
-                record = RecordWriter.logEntry(signature, threadName, timestamp, callerLine, depth, null, argsCbor);
+                record = RecordWriter.logEntry(sessionId, signature, threadName, timestamp, callerLine, depth, null, argsCbor);
             }
+
             RECORD_BUFFER.offer(record);
         } catch (Throwable t) {
             System.err.println("Error recording entry.");
@@ -87,14 +93,16 @@ public class DeepFlowAdvice {
             long timestamp = System.currentTimeMillis();
             CALL_DEPTH.set(Math.max(0, CALL_DEPTH.get() - 1));
 
+            String sessionId = getResolver().resolve();
+
             if (throwable != null) {
                 byte[] excCbor = Codec.encode(buildExceptionData(throwable));
-                byte[] record = RecordWriter.logExitException(threadName, timestamp, excCbor);
+                byte[] record = RecordWriter.logExitException(sessionId, threadName, timestamp, excCbor);
                 RECORD_BUFFER.offer(record);
             } else {
                 boolean isVoid = Void.TYPE.equals(method.getGenericReturnType());
                 byte[] returnCbor = isVoid ? null : Codec.encode(returned);
-                byte[] record = RecordWriter.logExit(threadName, timestamp, returnCbor, isVoid);
+                byte[] record = RecordWriter.logExit(sessionId, threadName, timestamp, returnCbor, isVoid);
                 RECORD_BUFFER.offer(record);
             }
         } catch (Throwable t) {
@@ -112,6 +120,50 @@ public class DeepFlowAdvice {
                 "stacktrace", stacktrace
         );
     }
+
+    // --- Session ID resolver loading (lazy, deferred until first use) ---
+
+    private static SessionIdResolver getResolver() {
+        SessionIdResolver r = SESSION_ID_RESOLVER;
+        if (r != null) return r;
+        synchronized (DeepFlowAdvice.class) {
+            r = SESSION_ID_RESOLVER;
+            if (r != null) return r;
+            r = loadSessionIdResolver(CONFIG);
+            SESSION_ID_RESOLVER = r;
+            return r;
+        }
+    }
+
+    private static SessionIdResolver loadSessionIdResolver(AgentConfig config) {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) {
+            cl = ClassLoader.getSystemClassLoader();
+        }
+        return loadSessionIdResolver(config, cl);
+    }
+
+    static SessionIdResolver loadSessionIdResolver(AgentConfig config, ClassLoader classLoader) {
+        String resolverName = config.getSessionResolver();
+        if (resolverName == null) {
+            return NOOP_RESOLVER;
+        }
+        ServiceLoader<SessionIdResolver> loader = ServiceLoader.load(
+                SessionIdResolver.class, classLoader);
+        for (SessionIdResolver resolver : loader) {
+            if (resolverName.equals(resolver.name())) {
+                return resolver;
+            }
+        }
+        System.err.println("WARNING: session_resolver='" + resolverName
+                + "' not found on classpath, session tracking disabled");
+        return NOOP_RESOLVER;
+    }
+
+    private static final SessionIdResolver NOOP_RESOLVER = new SessionIdResolver() {
+        @Override public String name() { return "noop"; }
+        @Override public String resolve() { return null; }
+    };
 
     // --- Method signature formatting ---
 

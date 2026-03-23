@@ -1,6 +1,7 @@
 package com.github.gabert.deepflow.codec.envelope;
 
 import java.io.IOException;
+import java.lang.reflect.Proxy;
 import java.util.IdentityHashMap;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.BeanProperty;
@@ -126,6 +127,22 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
 
       seen.put(value, id);
 
+      // ── Proxy detection ─────────────────────────────────
+      // Framework proxies (Hibernate, CGLIB, JDK dynamic) carry
+      // internal fields that Jackson cannot serialize. Emit a
+      // lightweight envelope with the real superclass name.
+      if (isProxy(value.getClass())) {
+         gen.writeStartObject();
+         gen.writeFieldId(FieldIds.OBJECT_ID);
+         gen.writeNumber(id);
+         gen.writeFieldId(FieldIds.CLASS_NAME);
+         gen.writeString(ClassNameCache.INSTANCE.get(value.getClass().getSuperclass()));
+         gen.writeFieldId(FieldIds.VALUE);
+         gen.writeString("<proxy>");
+         gen.writeEndObject();
+         return;
+      }
+
       // ── Runtime type resolution ───────────────────────────
       // If the delegate was resolved for Object.class (happens
       // when the declared type is Object, e.g. in Map<String,Object>
@@ -150,5 +167,13 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
       gen.writeFieldId(FieldIds.VALUE);
       resolvedDelegate.serialize(value, gen, serializers);
       gen.writeEndObject();
+   }
+
+   private static boolean isProxy(Class<?> cls) {
+      if (Proxy.isProxyClass(cls)) return true;
+      Class<?> parent = cls.getSuperclass();
+      if (parent == null || parent == Object.class) return false;
+      return !cls.getName().equals(parent.getName())
+          && cls.getName().startsWith(parent.getName() + "$");
    }
 }

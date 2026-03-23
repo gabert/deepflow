@@ -4,7 +4,7 @@ import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
 import com.github.gabert.deepflow.recorder.buffer.UnboundedRecordBuffer;
 import com.github.gabert.deepflow.recorder.destination.Destination;
 import com.github.gabert.deepflow.recorder.destination.RecordDrainer;
-import com.github.gabert.deepflow.recorder.destination.ZipDestination;
+import com.github.gabert.deepflow.recorder.destination.FileDestination;
 
 import java.io.IOException;
 import java.util.Map;
@@ -26,8 +26,7 @@ public final class RecorderManager {
     public static RecorderManager create(AgentConfig config) {
         try {
             Map<String, String> destinationConfig = Map.of(
-                    "session_dump_location", config.getSessionDumpLocation(),
-                    "session_id", config.getSessionId()
+                    "session_dump_location", config.getSessionDumpLocation()
             );
 
             Destination destination = createDestination(config.getDestination(), destinationConfig);
@@ -53,8 +52,8 @@ public final class RecorderManager {
     // --- Destination factory ---
 
     private static Destination createDestination(String type, Map<String, String> config) {
-        if ("zip".equals(type)) {
-            return new ZipDestination(config);
+        if ("file".equals(type)) {
+            return new FileDestination(config);
         }
         throw new IllegalArgumentException("Unknown destination type: " + type);
     }

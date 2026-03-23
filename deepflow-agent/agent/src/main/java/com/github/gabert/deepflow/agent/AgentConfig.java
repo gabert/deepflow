@@ -1,8 +1,6 @@
 package com.github.gabert.deepflow.agent;
 
 import java.io.*;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 
@@ -11,7 +9,7 @@ public class AgentConfig {
     private final List<String> matchersExclude = new ArrayList<>();
 
     private final String sessionDumpLocation;
-    private final String sessionId;
+    private final String sessionResolver;
     private final boolean expandThis;
     private final String destination;
 
@@ -33,9 +31,11 @@ public class AgentConfig {
         }
 
         this.sessionDumpLocation = configMap.get("session_dump_location");
-        this.sessionId = generateSessionId();
+        this.sessionResolver = configMap.getOrDefault("session_resolver", null);
         this.expandThis = Boolean.parseBoolean(configMap.getOrDefault("expand_this", "false"));
-        this.destination = configMap.getOrDefault("destination", "zip");
+        this.destination = configMap.getOrDefault("destination", "file");
+
+        publishSystemProperties(configMap);
     }
 
     public List<String> getMatchersInclude() {
@@ -50,8 +50,8 @@ public class AgentConfig {
         return sessionDumpLocation;
     }
 
-    public String getSessionId() {
-        return sessionId;
+    public String getSessionResolver() {
+        return sessionResolver;
     }
 
     public boolean isExpandThis() {
@@ -97,10 +97,11 @@ public class AgentConfig {
         return configMapParams;
     }
 
-    private static String generateSessionId() {
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
-        return now.format(formatter);
+    private static void publishSystemProperties(Map<String, String> configMap) {
+        String sessionId = configMap.get("session_id");
+        if (sessionId != null) {
+            System.setProperty("deepflow.session_id", sessionId);
+        }
     }
 
     private static Map<String, String> loadFromConfigFile(String filePath) throws IOException {

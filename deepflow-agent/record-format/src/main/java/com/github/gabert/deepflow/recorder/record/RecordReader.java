@@ -48,6 +48,12 @@ public final class RecordReader {
     public static MethodStartData decodeMethodStart(TraceRecord record) {
         byte[] payload = record.payload();
         int pos = 0;
+        int sessionIdLen = getShort(payload, pos);
+        pos += RecordType.SESSION_ID_LENGTH_SIZE;
+        String sessionId = sessionIdLen > 0
+                ? new String(payload, pos, sessionIdLen, StandardCharsets.UTF_8)
+                : null;
+        pos += sessionIdLen;
         int sigLen = getShort(payload, pos);
         pos += RecordType.SIGNATURE_LENGTH_SIZE;
         String signature = new String(payload, pos, sigLen, StandardCharsets.UTF_8);
@@ -61,18 +67,24 @@ public final class RecordReader {
         int callerLine = getInt(payload, pos);
         pos += RecordType.CALLER_LINE_SIZE;
         int depth = getInt(payload, pos);
-        return new MethodStartData(signature, threadName, timestamp, callerLine, depth);
+        return new MethodStartData(sessionId, signature, threadName, timestamp, callerLine, depth);
     }
 
     public static MethodEndData decodeMethodEnd(TraceRecord record) {
         byte[] payload = record.payload();
         int pos = 0;
+        int sessionIdLen = getShort(payload, pos);
+        pos += RecordType.SESSION_ID_LENGTH_SIZE;
+        String sessionId = sessionIdLen > 0
+                ? new String(payload, pos, sessionIdLen, StandardCharsets.UTF_8)
+                : null;
+        pos += sessionIdLen;
         int threadLen = getShort(payload, pos);
         pos += RecordType.THREAD_NAME_LENGTH_SIZE;
         String threadName = new String(payload, pos, threadLen, StandardCharsets.UTF_8);
         pos += threadLen;
         long timestamp = getLong(payload, pos);
-        return new MethodEndData(timestamp, threadName);
+        return new MethodEndData(sessionId, timestamp, threadName);
     }
 
     // --- Binary field readers ---
