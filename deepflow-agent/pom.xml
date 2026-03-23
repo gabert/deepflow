@@ -18,6 +18,8 @@
         <module>agent</module>
         <module>session-resolver-noop</module>
         <module>session-resolver-config</module>
+        <module>proxy-resolver-api</module>
+        <module>proxy-resolver-hibernate</module>
         <module>demo</module>
         <module>demo-spring-boot</module>
     </modules>

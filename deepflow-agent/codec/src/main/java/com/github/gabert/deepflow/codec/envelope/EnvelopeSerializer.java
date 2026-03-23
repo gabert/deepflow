@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.ser.ContextualSerializer;
 import com.fasterxml.jackson.databind.ser.ResolvableSerializer;
+import com.github.gabert.deepflow.codec.Codec;
+import com.github.gabert.deepflow.proxy.ProxyResolver;
 
 // ─────────────────────────────────────────────────────────────
 // EnvelopeSerializer
@@ -127,19 +129,24 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
 
       seen.put(value, id);
 
-      // ── Proxy detection ─────────────────────────────────
-      // Framework proxies (Hibernate, CGLIB, JDK dynamic) carry
-      // internal fields that Jackson cannot serialize. Emit a
-      // lightweight envelope with the real superclass name.
+      // ── Proxy / wrapper resolution ─────────────────────
+      // If a ProxyResolver is configured, give it first shot at
+      // unwrapping the object. This handles both entity proxies
+      // (HibernateProxy) and collection wrappers (PersistentBag).
+      ProxyResolver resolver = Codec.getProxyResolver();
+      if (resolver != null) {
+         Object resolved = resolver.resolve(value);
+         if (resolved != null) {
+            value = resolved;
+            seen.put(value, id);
+         }
+      }
+
+      // ── Proxy fallback ─────────────────────────────────
+      // If still a proxy after resolution (resolver absent, returned
+      // null, or doesn't handle this proxy type), emit <proxy> marker.
       if (isProxy(value.getClass())) {
-         gen.writeStartObject();
-         gen.writeFieldId(FieldIds.OBJECT_ID);
-         gen.writeNumber(id);
-         gen.writeFieldId(FieldIds.CLASS_NAME);
-         gen.writeString(ClassNameCache.INSTANCE.get(value.getClass().getSuperclass()));
-         gen.writeFieldId(FieldIds.VALUE);
-         gen.writeString("<proxy>");
-         gen.writeEndObject();
+         emitProxyMarker(value, id, gen);
          return;
       }
 
@@ -166,6 +173,17 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
       gen.writeString(ClassNameCache.INSTANCE.get(value.getClass()));
       gen.writeFieldId(FieldIds.VALUE);
       resolvedDelegate.serialize(value, gen, serializers);
+      gen.writeEndObject();
+   }
+
+   private static void emitProxyMarker(Object value, long id, JsonGenerator gen) throws IOException {
+      gen.writeStartObject();
+      gen.writeFieldId(FieldIds.OBJECT_ID);
+      gen.writeNumber(id);
+      gen.writeFieldId(FieldIds.CLASS_NAME);
+      gen.writeString(ClassNameCache.INSTANCE.get(value.getClass().getSuperclass()));
+      gen.writeFieldId(FieldIds.VALUE);
+      gen.writeString("<proxy>");
       gen.writeEndObject();
    }
 

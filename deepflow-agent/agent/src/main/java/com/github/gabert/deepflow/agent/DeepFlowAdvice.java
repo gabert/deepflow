@@ -3,6 +3,7 @@ package com.github.gabert.deepflow.agent;
 import com.github.gabert.deepflow.agent.session.SessionIdResolver;
 import com.github.gabert.deepflow.codec.Codec;
 import com.github.gabert.deepflow.codec.envelope.ObjectIdRegistry;
+import com.github.gabert.deepflow.proxy.ProxyResolver;
 import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
 import com.github.gabert.deepflow.recorder.record.RecordWriter;
 import net.bytebuddy.asm.Advice;
@@ -22,6 +23,7 @@ public class DeepFlowAdvice {
     public static RecordBuffer RECORD_BUFFER;
     private static boolean EXPAND_THIS;
     private static volatile SessionIdResolver SESSION_ID_RESOLVER;
+    private static volatile boolean PROXY_RESOLVER_INITIALIZED;
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
     private static final ThreadLocal<Integer> CALL_DEPTH = ThreadLocal.withInitial(() -> 0);
 
@@ -52,6 +54,7 @@ public class DeepFlowAdvice {
 
     public static void recordEntry(Method method, Object self, Object[] allArguments) {
         if (RECORD_BUFFER == null) return;
+        initProxyResolver();
         try {
             String signature = formatMethodSignature(method);
             String threadName = Thread.currentThread().getName();
@@ -164,6 +167,45 @@ public class DeepFlowAdvice {
         @Override public String name() { return "noop"; }
         @Override public String resolve() { return null; }
     };
+
+    // --- Proxy resolver loading (lazy, deferred until first use) ---
+
+    private static void initProxyResolver() {
+        if (PROXY_RESOLVER_INITIALIZED) return;
+        synchronized (DeepFlowAdvice.class) {
+            if (PROXY_RESOLVER_INITIALIZED) return;
+            ProxyResolver resolver = loadProxyResolver(CONFIG);
+            if (resolver != null) {
+                Codec.setProxyResolver(resolver);
+            }
+            PROXY_RESOLVER_INITIALIZED = true;
+        }
+    }
+
+    private static ProxyResolver loadProxyResolver(AgentConfig config) {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) {
+            cl = ClassLoader.getSystemClassLoader();
+        }
+        return loadProxyResolver(config, cl);
+    }
+
+    static ProxyResolver loadProxyResolver(AgentConfig config, ClassLoader classLoader) {
+        String resolverName = config.getProxyResolver();
+        if (resolverName == null) {
+            return null;
+        }
+        ServiceLoader<ProxyResolver> loader = ServiceLoader.load(
+                ProxyResolver.class, classLoader);
+        for (ProxyResolver resolver : loader) {
+            if (resolverName.equals(resolver.name())) {
+                return resolver;
+            }
+        }
+        System.err.println("WARNING: proxy_resolver='" + resolverName
+                + "' not found on classpath, proxy resolution disabled");
+        return null;
+    }
 
     // --- Method signature formatting ---
 

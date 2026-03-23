@@ -10,6 +10,7 @@ public class AgentConfig {
 
     private final String sessionDumpLocation;
     private final String sessionResolver;
+    private final String proxyResolver;
     private final boolean expandThis;
     private final String destination;
 
@@ -32,6 +33,7 @@ public class AgentConfig {
 
         this.sessionDumpLocation = configMap.get("session_dump_location");
         this.sessionResolver = configMap.getOrDefault("session_resolver", null);
+        this.proxyResolver = configMap.getOrDefault("proxy_resolver", null);
         this.expandThis = Boolean.parseBoolean(configMap.getOrDefault("expand_this", "false"));
         this.destination = configMap.getOrDefault("destination", "file");
 
@@ -52,6 +54,10 @@ public class AgentConfig {
 
     public String getSessionResolver() {
         return sessionResolver;
+    }
+
+    public String getProxyResolver() {
+        return proxyResolver;
     }
 
     public boolean isExpandThis() {

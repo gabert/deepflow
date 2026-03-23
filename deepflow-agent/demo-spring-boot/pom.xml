@@ -42,6 +42,16 @@
             <artifactId>SessionResolverApi</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
+        <dependency>
+            <groupId>com.github.gabert</groupId>
+            <artifactId>ProxyResolverApi</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.gabert</groupId>
+            <artifactId>ProxyResolverHibernate</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
     <build>
