@@ -39,7 +39,7 @@
         </dependency>
         <dependency>
             <groupId>com.github.gabert</groupId>
-            <artifactId>ProxyResolverApi</artifactId>
+            <artifactId>JpaProxyResolverApi</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

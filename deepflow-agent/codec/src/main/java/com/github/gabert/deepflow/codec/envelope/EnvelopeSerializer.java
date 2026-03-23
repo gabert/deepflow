@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.ser.ContextualSerializer;
 import com.fasterxml.jackson.databind.ser.ResolvableSerializer;
 import com.github.gabert.deepflow.codec.Codec;
-import com.github.gabert.deepflow.proxy.ProxyResolver;
+import com.github.gabert.deepflow.jpaproxy.JpaProxyResolver;
 
 // ─────────────────────────────────────────────────────────────
 // EnvelopeSerializer
@@ -129,11 +129,11 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
 
       seen.put(value, id);
 
-      // ── Proxy / wrapper resolution ─────────────────────
-      // If a ProxyResolver is configured, give it first shot at
+      // ── JPA proxy / wrapper resolution ──────────────────
+      // If a JpaProxyResolver is configured, give it first shot at
       // unwrapping the object. This handles both entity proxies
       // (HibernateProxy) and collection wrappers (PersistentBag).
-      ProxyResolver resolver = Codec.getProxyResolver();
+      JpaProxyResolver resolver = Codec.getJpaProxyResolver();
       if (resolver != null) {
          Object resolved = resolver.resolve(value);
          if (resolved != null) {

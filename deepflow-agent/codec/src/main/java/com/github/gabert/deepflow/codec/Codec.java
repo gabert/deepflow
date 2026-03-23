@@ -14,11 +14,11 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 import com.github.gabert.deepflow.codec.envelope.EnvelopeModule;
 import com.github.gabert.deepflow.codec.envelope.FieldIds;
-import com.github.gabert.deepflow.proxy.ProxyResolver;
+import com.github.gabert.deepflow.jpaproxy.JpaProxyResolver;
 
 public final class Codec {
 
-   private static volatile ProxyResolver proxyResolver;
+   private static volatile JpaProxyResolver jpaProxyResolver;
    private static final ObjectMapper CBOR_ENCODER;
    private static final ObjectMapper CBOR_DECODER;
    private static final ObjectMapper JSON_MAPPER;
@@ -37,12 +37,12 @@ public final class Codec {
    private Codec() {
    }
 
-   public static void setProxyResolver(ProxyResolver resolver) {
-      proxyResolver = resolver;
+   public static void setJpaProxyResolver(JpaProxyResolver resolver) {
+      jpaProxyResolver = resolver;
    }
 
-   public static ProxyResolver getProxyResolver() {
-      return proxyResolver;
+   public static JpaProxyResolver getJpaProxyResolver() {
+      return jpaProxyResolver;
    }
 
    /**

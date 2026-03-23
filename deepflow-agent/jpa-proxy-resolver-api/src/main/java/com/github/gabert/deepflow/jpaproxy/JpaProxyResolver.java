@@ -1,11 +1,11 @@
-package com.github.gabert.deepflow.proxy;
+package com.github.gabert.deepflow.jpaproxy;
 
 /**
- * SPI for resolving framework proxy objects to their underlying real objects.
+ * SPI for resolving JPA framework proxy objects to their underlying real objects.
  *
  * When the agent encounters a proxy (Hibernate, CGLIB, JDK dynamic), it
  * normally emits {@code <proxy>} instead of serializing the object.
- * A ProxyResolver implementation can unwrap the proxy and return the
+ * A JpaProxyResolver implementation can unwrap the proxy and return the
  * real object so the agent captures its full state.
  *
  * Implementations must be thread-safe. The resolver is called during
@@ -13,15 +13,15 @@ package com.github.gabert.deepflow.proxy;
  * arguments, return values, and this-instances.
  *
  * Register implementations via Java ServiceLoader:
- * META-INF/services/com.github.gabert.deepflow.proxy.ProxyResolver
+ * META-INF/services/com.github.gabert.deepflow.jpaproxy.JpaProxyResolver
  *
- * The agent selects which resolver to use via the {@code proxy_resolver}
+ * The agent selects which resolver to use via the {@code jpa_proxy_resolver}
  * config property, matching against {@link #name()}.
  */
-public interface ProxyResolver {
+public interface JpaProxyResolver {
 
     /**
-     * Unique name used to select this resolver via the {@code proxy_resolver}
+     * Unique name used to select this resolver via the {@code jpa_proxy_resolver}
      * config property (e.g. "hibernate").
      */
     String name();

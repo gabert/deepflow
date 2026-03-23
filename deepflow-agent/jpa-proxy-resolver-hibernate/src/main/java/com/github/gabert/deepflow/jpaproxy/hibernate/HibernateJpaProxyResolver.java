@@ -1,6 +1,6 @@
-package com.github.gabert.deepflow.proxy.hibernate;
+package com.github.gabert.deepflow.jpaproxy.hibernate;
 
-import com.github.gabert.deepflow.proxy.ProxyResolver;
+import com.github.gabert.deepflow.jpaproxy.JpaProxyResolver;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -29,9 +29,9 @@ import java.util.Set;
  * is not initialized, returns {@code null} and the agent falls back to its
  * default behavior.
  *
- * Activate via: {@code proxy_resolver=hibernate}
+ * Activate via: {@code jpa_proxy_resolver=hibernate}
  */
-public final class HibernateProxyResolver implements ProxyResolver {
+public final class HibernateJpaProxyResolver implements JpaProxyResolver {
 
     @Override
     public String name() {

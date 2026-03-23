@@ -10,14 +10,6 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>ProxyResolverHibernate</artifactId>
-
-    <dependencies>
-        <dependency>
-            <groupId>com.github.gabert</groupId>
-            <artifactId>ProxyResolverApi</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-    </dependencies>
+    <artifactId>JpaProxyResolverApi</artifactId>
 
 </project>
