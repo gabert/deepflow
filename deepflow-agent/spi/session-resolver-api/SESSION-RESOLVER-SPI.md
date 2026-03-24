@@ -65,13 +65,6 @@ When the resolver returns `null`, no `SI;` line appears in the output and the
 See [RECORD-FORMAT.md](../../core/record-format/RECORD-FORMAT.md) for the binary
 layout of the session ID field.
 
-## Default behavior (no-op)
-
-When `session_resolver` is **not configured**, the agent uses a built-in no-op
-resolver that always returns `null`. No SPI lookup is performed and no `SI;`
-lines appear in the output. This is also the fallback when a named resolver
-is not found on the classpath.
-
 ## Available implementations
 
 ### config
