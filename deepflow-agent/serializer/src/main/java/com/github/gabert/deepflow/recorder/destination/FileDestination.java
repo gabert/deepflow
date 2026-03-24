@@ -14,7 +14,7 @@ import java.util.Map;
 
 public class FileDestination implements Destination {
     private final Path sessionDir;
-    private final String sessionId;
+    private final String runTimestamp;
     private final Map<String, BufferedWriter> writers = new LinkedHashMap<>();
 
     public FileDestination(Map<String, String> config) {
@@ -22,8 +22,8 @@ public class FileDestination implements Destination {
         if (dumpLocation == null) {
             throw new IllegalArgumentException("session_dump_location is required for file destination");
         }
-        this.sessionId = generateSessionId();
-        this.sessionDir = Paths.get(dumpLocation).resolve("SESSION-" + sessionId);
+        this.runTimestamp = generateRunTimestamp();
+        this.sessionDir = Paths.get(dumpLocation).resolve("SESSION-" + runTimestamp);
     }
 
     @Override
@@ -62,7 +62,7 @@ public class FileDestination implements Destination {
         BufferedWriter writer = writers.get(threadName);
         if (writer == null) {
             Files.createDirectories(sessionDir);
-            Path filePath = sessionDir.resolve(sessionId + "-" + threadName + ".dft");
+            Path filePath = sessionDir.resolve(runTimestamp + "-" + threadName + ".dft");
             writer = Files.newBufferedWriter(filePath, StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             writers.put(threadName, writer);
@@ -70,7 +70,7 @@ public class FileDestination implements Destination {
         return writer;
     }
 
-    private static String generateSessionId() {
+    private static String generateRunTimestamp() {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
         return now.format(formatter);

@@ -34,7 +34,7 @@ DeepFlowAdvice               (daemon thread)
                                ▼
                           (on JVM shutdown)
                           destination.flush()
-                          destination.close()  ──→  ZIP file / HTTP / ...
+                          destination.close()  ──→  .dft files / HTTP / ...
 ```
 
 ## buffer package
@@ -92,7 +92,8 @@ public interface Destination extends Closeable {
 The interface receives **raw binary data**. This is intentional — it keeps the
 abstraction at the right level:
 
-- `ZipDestination` decodes binary to human-readable text and writes a zip file.
+- `FileDestination` decodes binary to human-readable text and writes per-thread
+  `.dft` files into a session directory.
 - A future `HttpDestination` would forward raw binary bytes to a server without
   any decoding.
 
@@ -149,34 +150,37 @@ to produce JSON representations of arguments, return values, and exceptions.
 See [RECORD-FORMAT.md — Text rendering](../record-format/RECORD-FORMAT.md#text-rendering)
 for the full tag mapping.
 
-### ZipDestination
+### FileDestination
 
-Accumulates rendered text lines per thread in memory, then writes a single
-ZIP file on `close()`.
+Writes rendered text lines to per-thread `.dft` files inside a session
+directory. Each record is flushed immediately, so trace files are readable
+while the application is still running.
 
 **Accept phase** (called per record by the drainer):
 
 1. Render binary record to text via `RecordRenderer.render()`.
 2. Extract thread name from the render result.
-3. Append lines to the thread's accumulator (`LinkedHashMap<String, List<String>>`).
+3. Look up (or create) a `BufferedWriter` for that thread.
+4. Write text lines and flush.
 
-**Close phase** (called once on JVM shutdown):
+**Directory and file naming:**
 
-1. Create the output ZIP file at `<session_dump_location>/SESSION-<session_id>.zip`.
-2. For each thread, write a ZIP entry named `<session_id>-<thread_name>.dft`.
-3. Each entry contains the accumulated text lines, one per line.
+On construction, `FileDestination` generates a **run timestamp**
+(`yyyyMMdd-HHmmss`) that is used solely for naming the output directory and
+files. This is _not_ the logical session ID — the logical session ID comes
+from the `SessionIdResolver` SPI and is embedded inside individual trace
+records (see [SESSION-RESOLVER-SPI.md](../session-resolver-api/SESSION-RESOLVER-SPI.md)).
 
 **Constructor config** (via `Map<String, String>`):
 
-| Key                    | Required | Description                       |
-|------------------------|----------|-----------------------------------|
-| `session_dump_location`| Yes      | Directory for the output ZIP file |
-| `session_id`           | Yes      | Used in file and entry naming     |
+| Key                    | Required | Description                                |
+|------------------------|----------|--------------------------------------------|
+| `session_dump_location`| Yes      | Parent directory for the session folder     |
 
-Example output for a session with two threads:
+Example output for a run with two threads:
 
 ```
-D:\temp\SESSION-20260320-213331.zip
+D:\temp\SESSION-20260320-213331\
   ├── 20260320-213331-main.dft
   └── 20260320-213331-worker-thread.dft
 ```

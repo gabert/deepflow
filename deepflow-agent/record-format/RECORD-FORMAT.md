@@ -3,7 +3,7 @@
 This document specifies the binary wire format used by the Deepflow agent to
 record method traces. The format is defined in the `record-format` Maven module
 and is the shared contract between any producer (the agent) and any consumer
-(zip destination, HTTP server, external tooling).
+(file destination, HTTP server, external tooling).
 
 All multi-byte integers are **big-endian** (network byte order). Signedness is
 specified per field in the payload layouts below.
@@ -87,17 +87,24 @@ METHOD_START (outer)         depth=0
 
 ### METHOD_START (0x01)
 
-| Offset | Size    | Type     | Field        | Description                               |
-|--------|---------|----------|--------------|-------------------------------------------|
-| 0      | 2 bytes | `uint16` | sig_len      | Byte length of `signature`                |
-| 2      | sig_len | UTF-8    | signature    | Method signature string (see format below)|
-| 2+S    | 2 bytes | `uint16` | thread_len   | Byte length of `thread_name`              |
-| 4+S    | T bytes | UTF-8    | thread_name  | Name of the executing thread              |
-| 4+S+T  | 8 bytes | `int64`  | timestamp    | Epoch milliseconds (`System.currentTimeMillis()`) |
-| 12+S+T | 4 bytes | `int32`  | caller_line  | Source line number of the call site (0 if unknown) |
-| 16+S+T | 4 bytes | `int32`  | depth        | Call depth (0 = top-level, 1 = one level nested, ...) |
+| Offset       | Size    | Type     | Field        | Description                               |
+|--------------|---------|----------|--------------|-------------------------------------------|
+| 0            | 2 bytes | `uint16` | sid_len      | Byte length of `session_id` (0 if no session) |
+| 2            | I bytes | UTF-8    | session_id   | Logical session ID from `SessionIdResolver` (absent when sid_len = 0) |
+| 2+I          | 2 bytes | `uint16` | sig_len      | Byte length of `signature`                |
+| 4+I          | S bytes | UTF-8    | signature    | Method signature string (see format below)|
+| 4+I+S        | 2 bytes | `uint16` | thread_len   | Byte length of `thread_name`              |
+| 6+I+S        | T bytes | UTF-8    | thread_name  | Name of the executing thread              |
+| 6+I+S+T      | 8 bytes | `int64`  | timestamp    | Epoch milliseconds (`System.currentTimeMillis()`) |
+| 14+I+S+T     | 4 bytes | `int32`  | caller_line  | Source line number of the call site (0 if unknown) |
+| 18+I+S+T     | 4 bytes | `int32`  | depth        | Call depth (0 = top-level, 1 = one level nested, ...) |
 
-Where `S` = sig_len, `T` = thread_len.
+Where `I` = sid_len, `S` = sig_len, `T` = thread_len.
+
+The session ID is provided by the `SessionIdResolver` SPI (see
+[SESSION-RESOLVER-SPI.md](../session-resolver-api/SESSION-RESOLVER-SPI.md)).
+When no resolver is configured or the resolver returns `null`, `sid_len` is 0
+and no bytes are written for `session_id`.
 
 **Signature format:** `package::ClassName.methodName(param::Types) -> return::Type [modifiers]`
 
@@ -142,11 +149,15 @@ The payload is the CBOR encoding of a `Map<String, Object>` with:
 
 ### METHOD_END (0x05)
 
-| Offset | Size    | Type     | Field       | Description                               |
-|--------|---------|----------|-------------|-------------------------------------------|
-| 0      | 2 bytes | `uint16` | thread_len  | Byte length of `thread_name`              |
-| 2      | T bytes | UTF-8    | thread_name | Name of the executing thread              |
-| 2+T    | 8 bytes | `int64`  | timestamp   | Epoch milliseconds at method exit         |
+| Offset  | Size    | Type     | Field       | Description                               |
+|---------|---------|----------|-------------|-------------------------------------------|
+| 0       | 2 bytes | `uint16` | sid_len     | Byte length of `session_id` (0 if no session) |
+| 2       | I bytes | UTF-8    | session_id  | Logical session ID (absent when sid_len = 0) |
+| 2+I     | 2 bytes | `uint16` | thread_len  | Byte length of `thread_name`              |
+| 4+I     | T bytes | UTF-8    | thread_name | Name of the executing thread              |
+| 4+I+T   | 8 bytes | `int64`  | timestamp   | Epoch milliseconds at method exit         |
+
+Where `I` = sid_len, `T` = thread_len.
 
 ### THIS_INSTANCE (0x06)
 
@@ -176,7 +187,7 @@ mapping is:
 
 | Binary record     | Text line(s)                                      |
 |--------------------|---------------------------------------------------|
-| METHOD_START       | `MS;<signature>`, `TN;<thread>`, `CD;<depth>`, `TS;<timestamp>`, `CL;<caller_line>` |
+| METHOD_START       | `SI;<session_id>` (if present), `MS;<signature>`, `TN;<thread>`, `CD;<depth>`, `TS;<timestamp>`, `CL;<caller_line>` |
 | THIS_INSTANCE      | `TI;<decoded JSON>`                               |
 | THIS_INSTANCE_REF  | `TI;<object_id>`                                  |
 | ARGUMENTS          | `AR;<decoded JSON>`                               |
