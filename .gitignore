@@ -31,3 +31,8 @@ env/
 # Logs and databases
 *.log
 *.sqlite
+
+# Claude Code
+CLAUDE.md
+TASKS.md
+.claude/
