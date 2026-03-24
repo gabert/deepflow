@@ -65,19 +65,14 @@ When the resolver returns `null`, no `SI;` line appears in the output and the
 See [RECORD-FORMAT.md](../../core/record-format/RECORD-FORMAT.md) for the binary
 layout of the session ID field.
 
-## Built-in implementations
+## Default behavior (no-op)
 
-### noop
+When `session_resolver` is **not configured**, the agent uses a built-in no-op
+resolver that always returns `null`. No SPI lookup is performed and no `SI;`
+lines appear in the output. This is also the fallback when a named resolver
+is not found on the classpath.
 
-| Property | Value |
-|----------|-------|
-| Name     | `noop` |
-| Module   | `session-resolver-noop` |
-| Behavior | Always returns `null` — session tracking disabled. |
-
-This is also the fallback when `session_resolver` is not configured or the
-named resolver is not found on the classpath. The module serves as a reference
-example for implementing a custom resolver.
+## Available implementations
 
 ### config
 

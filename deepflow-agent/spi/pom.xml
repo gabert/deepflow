@@ -15,7 +15,6 @@
 
     <modules>
         <module>session-resolver-api</module>
-        <module>session-resolver-noop</module>
         <module>session-resolver-config</module>
         <module>jpa-proxy-resolver-api</module>
         <module>jpa-proxy-resolver-hibernate</module>
