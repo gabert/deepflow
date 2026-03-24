@@ -12,6 +12,7 @@ public class AgentConfig {
     private final String sessionResolver;
     private final String jpaProxyResolver;
     private final boolean expandThis;
+    private final boolean serializeValues;
     private final String destination;
 
     private AgentConfig(Map<String, String> configMap) {
@@ -35,6 +36,7 @@ public class AgentConfig {
         this.sessionResolver = configMap.getOrDefault("session_resolver", null);
         this.jpaProxyResolver = configMap.getOrDefault("jpa_proxy_resolver", null);
         this.expandThis = Boolean.parseBoolean(configMap.getOrDefault("expand_this", "false"));
+        this.serializeValues = Boolean.parseBoolean(configMap.getOrDefault("serialize_values", "true"));
         this.destination = configMap.getOrDefault("destination", "file");
 
         publishSystemProperties(configMap);
@@ -62,6 +64,10 @@ public class AgentConfig {
 
     public boolean isExpandThis() {
         return expandThis;
+    }
+
+    public boolean isSerializeValues() {
+        return serializeValues;
     }
 
     public String getDestination() {

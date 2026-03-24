@@ -46,6 +46,17 @@ public final class RecordWriter {
         return concat(exc, end);
     }
 
+    public static byte[] logEntrySimple(String sessionId, String signature, String threadName,
+                                        long timestamp, int callerLine, int depth) {
+        byte[] sessionIdBytes = encodeSessionId(sessionId);
+        return methodStart(sessionIdBytes, signature, threadName, timestamp, callerLine, depth);
+    }
+
+    public static byte[] logExitSimple(String sessionId, String threadName, long timestamp) {
+        byte[] sessionIdBytes = encodeSessionId(sessionId);
+        return methodEnd(sessionIdBytes, threadName, timestamp);
+    }
+
     // --- logEntry internals ---
 
     private static byte[] methodStart(byte[] sessionIdBytes, String signature, String threadName,

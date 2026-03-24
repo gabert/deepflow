@@ -23,6 +23,41 @@ class SessionIdResolverLoadingTest {
         assertEquals("test-session-123", resolver.resolve());
     }
 
+    // --- Middle provider selected when multiple are on classpath ---
+
+    @Test
+    void middleProviderSelectedFromMultiple() throws IOException {
+        AgentConfig config = AgentConfig.getInstance("session_resolver=test");
+        ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
+
+        SessionIdResolver resolver = DeepFlowAdvice.loadSessionIdResolver(config, testClassLoader);
+
+        assertEquals("test", resolver.name());
+        assertEquals("test-session-123", resolver.resolve());
+    }
+
+    @Test
+    void firstProviderSelectedFromMultiple() throws IOException {
+        AgentConfig config = AgentConfig.getInstance("session_resolver=alpha");
+        ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
+
+        SessionIdResolver resolver = DeepFlowAdvice.loadSessionIdResolver(config, testClassLoader);
+
+        assertEquals("alpha", resolver.name());
+        assertEquals("alpha-session", resolver.resolve());
+    }
+
+    @Test
+    void lastProviderSelectedFromMultiple() throws IOException {
+        AgentConfig config = AgentConfig.getInstance("session_resolver=gamma");
+        ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
+
+        SessionIdResolver resolver = DeepFlowAdvice.loadSessionIdResolver(config, testClassLoader);
+
+        assertEquals("gamma", resolver.name());
+        assertEquals("gamma-session", resolver.resolve());
+    }
+
     // --- Unmatched name falls back to noop ---
 
     @Test
