@@ -155,6 +155,7 @@ key=value
 | `matchers_exclude`     | (empty) | Comma-separated regexes of classes to exclude |
 | `destination`          | `file`  | Output destination type                       |
 | `expand_this`          | `false` | If `true`, serialize full `this` object; if `false`, record only the object ID |
+| `serialize_values`     | `true`  | If `false`, skip CBOR serialization entirely — record only method signatures, call depth, and timestamps (dead code detection mode) |
 | `session_resolver`     | (none)  | Name of the `SessionIdResolver` SPI to activate (see [SESSION-RESOLVER-SPI.md](../../spi/session-resolver-api/SESSION-RESOLVER-SPI.md)) |
 | `session_id`           | (none)  | Custom session ID — published as system property `deepflow.session_id` for the `config` resolver |
 | `jpa_proxy_resolver`   | (none)  | Name of the `JpaProxyResolver` SPI to activate (see [JPA-PROXY-RESOLVER-SPI.md](../../spi/jpa-proxy-resolver-api/JPA-PROXY-RESOLVER-SPI.md)) |
@@ -212,6 +213,7 @@ as-is — their packages (`com.github.gabert.deepflow.*`) are unique.
 | `DeepFlowRecordFormat`       | Binary wire format for trace records |
 | `DeepFlowSerializer`         | Buffer, drainer, and destinations    |
 | `SessionResolverApi`         | `SessionIdResolver` SPI interface    |
+| `JpaProxyResolverApi`        | `JpaProxyResolver` SPI interface     |
 | `jackson-databind`           | JSON/CBOR object mapping (shaded)    |
 | `jackson-dataformat-cbor`    | CBOR binary format support (shaded)  |
 | `byte-buddy`                 | Bytecode instrumentation (shaded)    |
@@ -225,7 +227,7 @@ dependencies carry invalid signatures. JDK 24 multi-release class files
 ## Build
 
 ```bash
-cd deepflow-agent/agent
+cd deepflow-agent/core/agent
 mvn clean install
 # Output: target/deepflow-agent.jar
 ```

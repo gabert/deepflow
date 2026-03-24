@@ -94,17 +94,7 @@ session_id=my-debug-run-01
 Useful for standalone applications or batch jobs where a single fixed session
 ID is sufficient.
 
-## Demo / example implementations
-
-### demo
-
-| Property | Value |
-|----------|-------|
-| Name     | `demo` |
-| Module   | `demo` |
-| Behavior | Returns the fixed string `"demo-session-42"`. |
-
-For verifying the SPI works end-to-end.
+## Example implementations
 
 ### spring-session
 
