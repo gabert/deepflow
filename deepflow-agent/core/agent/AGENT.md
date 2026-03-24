@@ -30,6 +30,10 @@ JVM loads -javaagent
           └→ Register JVM shutdown hook           Ensures drain + close on exit
     3. Build ByteBuddy type matchers              From matchers_include / matchers_exclude
     4. Install advice on instrumentation          Intercepts matched methods at class load
+
+  On first instrumented method entry (deferred from startup):
+    5. Load SessionIdResolver via SPI             Lazy, uses context classloader
+    6. Load JpaProxyResolver via SPI              Lazy, registers with Codec
 ```
 
 ## Bytecode instrumentation
@@ -76,7 +80,7 @@ are also excluded.
 
 ### On method enter (`DeepFlowAdvice.onEnter`)
 
-Captures:
+Always captured (regardless of `serialize_values`):
 
 | Data               | Source                                         |
 |--------------------|------------------------------------------------|
@@ -85,25 +89,60 @@ Captures:
 | Timestamp          | `System.currentTimeMillis()`                   |
 | Call depth          | Per-thread `ThreadLocal<Integer>` counter      |
 | Caller line number | `StackWalker` — source line of the call site   |
+| Session ID         | `SessionIdResolver.resolve()` — from the SPI resolver (see below) |
+
+Additionally captured when `serialize_values=true` (the default):
+
+| Data               | Source                                         |
+|--------------------|------------------------------------------------|
 | `this` instance    | Full CBOR encoding (if `expand_this=true`) or object ID reference (default) |
 | Arguments          | `Codec.encode(Object[])` — CBOR with envelope  |
 
-The captured data is written as a binary record group (`METHOD_START` +
-optional `THIS_INSTANCE`/`THIS_INSTANCE_REF` + `ARGUMENTS`) via `RecordWriter`
-and offered to the shared `RecordBuffer`.
+When `serialize_values=true`, the captured data is written as a binary record
+group (`METHOD_START` + optional `THIS_INSTANCE`/`THIS_INSTANCE_REF` +
+`ARGUMENTS`) via `RecordWriter` and offered to the shared `RecordBuffer`.
+
+When `serialize_values=false`, only `METHOD_START` is emitted — no CBOR
+serialization occurs. This mode is useful for dead code detection where only
+the call graph matters.
 
 ### On method exit (`DeepFlowAdvice.onExit`)
 
-Captures:
+Always captured:
 
 | Data               | Source                                         |
 |--------------------|------------------------------------------------|
 | Thread name        | `Thread.currentThread().getName()`             |
 | Timestamp          | `System.currentTimeMillis()`                   |
+| Session ID         | `SessionIdResolver.resolve()`                  |
+
+Additionally captured when `serialize_values=true`:
+
+| Data               | Source                                         |
+|--------------------|------------------------------------------------|
 | Return value       | `Codec.encode(returned)` — or empty for void   |
 | Exception (if any) | `Map{"message": ..., "stacktrace": [...]}` encoded as CBOR |
 
-Written as a binary record group (`RETURN`/`EXCEPTION` + `METHOD_END`).
+When `serialize_values=true`, written as a binary record group
+(`RETURN`/`EXCEPTION` + `METHOD_END`).
+
+When `serialize_values=false`, only `METHOD_END` is emitted.
+
+### SPI resolver initialization
+
+Both SPI resolvers are loaded **lazily** on the first instrumented method
+entry — not at agent startup. This ensures the application's classloaders are
+fully initialized (important for Spring Boot and other container-managed
+environments).
+
+- **`SessionIdResolver`** — loaded via double-checked locking on first call to
+  `getResolver()`. Uses `ServiceLoader` with the thread's context classloader.
+  If `session_resolver` is not configured, a built-in no-op resolver (returns
+  `null`) is used without any SPI lookup.
+- **`JpaProxyResolver`** — loaded via double-checked locking in
+  `initJpaProxyResolver()`, called at the top of every `recordEntry`. When
+  found, the resolver is registered with `Codec.setJpaProxyResolver()` so the
+  CBOR encoder can unwrap Hibernate proxies during serialization.
 
 ### Error isolation
 
