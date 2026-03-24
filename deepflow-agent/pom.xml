@@ -10,18 +10,10 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>codec</module>
-        <module>record-format</module>
-        <module>serializer</module>
-        <module>session-resolver-api</module>
-        <module>record-collector-server</module>
-        <module>agent</module>
-        <module>session-resolver-noop</module>
-        <module>session-resolver-config</module>
-        <module>jpa-proxy-resolver-api</module>
-        <module>jpa-proxy-resolver-hibernate</module>
-        <module>demo</module>
-        <module>demo-spring-boot</module>
+        <module>spi</module>
+        <module>core</module>
+        <module>server</module>
+        <module>demos</module>
     </modules>
 
     <properties>
