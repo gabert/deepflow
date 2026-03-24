@@ -70,7 +70,28 @@ METHOD_END
 ```
 
 A full method invocation therefore produces 4 records (no `this`), 5 records
-(with `this`), and nested calls interleave naturally:
+(with `this`), and nested calls interleave naturally.
+
+When `serialize_values=false`, only the structural records are emitted — no
+CBOR-encoded data is captured:
+
+**Method entry** (emitted by `RecordWriter.logEntrySimple`):
+
+```
+METHOD_START
+```
+
+**Method exit** (emitted by `RecordWriter.logExitSimple`):
+
+```
+METHOD_END
+```
+
+This mode is useful for dead code detection where only the call graph matters,
+not the data flowing through it. It significantly reduces overhead since no
+CBOR serialization occurs.
+
+**Full serialization example** (`serialize_values=true`, the default):
 
 ```
 METHOD_START (outer)         depth=0
