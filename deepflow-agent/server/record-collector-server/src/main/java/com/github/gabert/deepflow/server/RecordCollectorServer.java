@@ -53,13 +53,13 @@ public class RecordCollectorServer {
         if (serverChannel != null) {
             serverChannel.close();
         }
-        forwarder.close();
         if (bossGroup != null) {
-            bossGroup.shutdownGracefully();
+            bossGroup.shutdownGracefully().syncUninterruptibly();
         }
         if (workerGroup != null) {
-            workerGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully().syncUninterruptibly();
         }
+        forwarder.close();
     }
 
     public static void main(String[] args) throws Exception {
