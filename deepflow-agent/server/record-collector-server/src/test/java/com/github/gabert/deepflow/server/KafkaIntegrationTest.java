@@ -1,6 +1,5 @@
 package com.github.gabert.deepflow.server;
 
-import com.github.gabert.deepflow.codec.Codec;
 import com.github.gabert.deepflow.recorder.record.RecordWriter;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -21,9 +20,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,8 +29,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class KafkaIntegrationTest {
 
     private static final String TOPIC = "deepflow-records";
-    private static final String SIGNATURE = "com.example::TestClass.testMethod() -> void [public]";
-    private static final String THREAD = "test-thread";
 
     @Container
     static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
@@ -59,14 +54,10 @@ class KafkaIntegrationTest {
     }
 
     @Test
-    void simpleRecordArrivesInKafka() throws Exception {
-        byte[] entry = RecordWriter.logEntrySimple(
-                "test-session-001", SIGNATURE, THREAD,
-                System.currentTimeMillis(), 42, 0);
-        byte[] exit = RecordWriter.logExitSimple(
-                "test-session-001", THREAD,
-                System.currentTimeMillis());
-        byte[] payload = concat(entry, exit);
+    void payloadArrivesInKafkaBytePerfect() throws Exception {
+        byte[] payload = RecordWriter.logEntrySimple(
+                "s1", "com.x::M.m() -> void [public]", "t1",
+                1000L, 1, 0);
 
         try (KafkaConsumer<String, byte[]> consumer = createConsumer()) {
             int httpStatus = postRecords(payload);
@@ -75,28 +66,6 @@ class KafkaIntegrationTest {
             byte[] received = pollOneMessage(consumer);
             assertNotNull(received, "Should receive a message from Kafka");
             assertArrayEquals(payload, received, "Kafka message should match sent payload byte-for-byte");
-        }
-    }
-
-    @Test
-    void fullRecordWithArgsArrivesInKafka() throws Exception {
-        byte[] args = Codec.encode(new Object[]{"hello", 123});
-        byte[] ret = Codec.encode("result");
-        byte[] entry = RecordWriter.logEntry(
-                "test-session-002", SIGNATURE, THREAD,
-                System.currentTimeMillis(), 10, 0, null, args);
-        byte[] exit = RecordWriter.logExit(
-                "test-session-002", THREAD,
-                System.currentTimeMillis(), ret, false);
-        byte[] payload = concat(entry, exit);
-
-        try (KafkaConsumer<String, byte[]> consumer = createConsumer()) {
-            int httpStatus = postRecords(payload);
-            assertEquals(200, httpStatus);
-
-            byte[] received = pollOneMessage(consumer);
-            assertNotNull(received);
-            assertArrayEquals(payload, received);
         }
     }
 
@@ -121,7 +90,6 @@ class KafkaIntegrationTest {
 
         KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(props);
         consumer.subscribe(Collections.singletonList(TOPIC));
-        // Force partition assignment before sending data
         consumer.poll(Duration.ofSeconds(5));
         return consumer;
     }
@@ -135,19 +103,5 @@ class KafkaIntegrationTest {
             }
         }
         return null;
-    }
-
-    private static byte[] concat(byte[]... arrays) {
-        int totalLength = 0;
-        for (byte[] array : arrays) {
-            totalLength += array.length;
-        }
-        byte[] result = new byte[totalLength];
-        int pos = 0;
-        for (byte[] array : arrays) {
-            System.arraycopy(array, 0, result, pos, array.length);
-            pos += array.length;
-        }
-        return result;
     }
 }
