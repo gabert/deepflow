@@ -19,6 +19,8 @@ class ServerConfigTest {
 
         assertEquals(8099, config.getServerPort());
         assertEquals(10 * 1024 * 1024, config.getMaxContentLength());
+        assertEquals("localhost:9092", config.getKafkaBootstrapServers());
+        assertEquals("deepflow-records", config.getKafkaTopic());
     }
 
     // --- CLI overrides ---
@@ -27,11 +29,15 @@ class ServerConfigTest {
     void cliOverridesDefaults() throws IOException {
         ServerConfig config = ServerConfig.load(new String[]{
                 "server_port=9090",
-                "max_content_length=5242880"
+                "max_content_length=5242880",
+                "kafka_bootstrap_servers=broker1:9092,broker2:9092",
+                "kafka_topic=my-topic"
         });
 
         assertEquals(9090, config.getServerPort());
         assertEquals(5242880, config.getMaxContentLength());
+        assertEquals("broker1:9092,broker2:9092", config.getKafkaBootstrapServers());
+        assertEquals("my-topic", config.getKafkaTopic());
     }
 
     // --- Config file ---

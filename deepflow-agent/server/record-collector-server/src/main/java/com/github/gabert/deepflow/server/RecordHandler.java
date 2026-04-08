@@ -18,9 +18,9 @@ import java.nio.charset.StandardCharsets;
 public class RecordHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     static final String RECORDS_PATH = "/records";
 
-    private final RecordForwarder forwarder;
+    private final KafkaRecordForwarder forwarder;
 
-    public RecordHandler(RecordForwarder forwarder) {
+    public RecordHandler(KafkaRecordForwarder forwarder) {
         this.forwarder = forwarder;
     }
 

@@ -8,7 +8,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.Properties;
 
-public class KafkaRecordForwarder implements RecordForwarder {
+public class KafkaRecordForwarder {
     private final KafkaProducer<String, byte[]> producer;
     private final String topic;
 
@@ -34,7 +34,6 @@ public class KafkaRecordForwarder implements RecordForwarder {
         });
     }
 
-    @Override
     public void close() {
         producer.flush();
         producer.close();
