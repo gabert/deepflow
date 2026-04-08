@@ -10,14 +10,18 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 
+import java.net.InetSocketAddress;
+
 public class RecordCollectorServer {
     private final ServerConfig config;
+    private final KafkaRecordForwarder forwarder;
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
     private Channel serverChannel;
 
     public RecordCollectorServer(ServerConfig config) {
         this.config = config;
+        this.forwarder = new KafkaRecordForwarder(config);
     }
 
     public void start() throws InterruptedException {
@@ -33,18 +37,23 @@ public class RecordCollectorServer {
                         ch.pipeline().addLast(
                                 new HttpServerCodec(),
                                 new HttpObjectAggregator(config.getMaxContentLength()),
-                                new RecordHandler());
+                                new RecordHandler(forwarder));
                     }
                 });
 
         serverChannel = bootstrap.bind(config.getServerPort()).sync().channel();
-        System.out.println("RecordCollectorServer started on port " + config.getServerPort());
+        System.out.println("RecordCollectorServer started on port " + getPort());
+    }
+
+    public int getPort() {
+        return ((InetSocketAddress) serverChannel.localAddress()).getPort();
     }
 
     public void stop() {
         if (serverChannel != null) {
             serverChannel.close();
         }
+        forwarder.close();
         if (bossGroup != null) {
             bossGroup.shutdownGracefully();
         }

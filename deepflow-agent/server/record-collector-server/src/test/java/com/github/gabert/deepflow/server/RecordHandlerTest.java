@@ -12,6 +12,9 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class RecordHandlerTest {
@@ -25,10 +28,13 @@ class RecordHandlerTest {
     void postValidRecordReturns200() throws Exception {
         byte[] args = Codec.encode(new Object[]{"hello"});
         byte[] body = RecordWriter.logEntry(null, SIGNATURE, THREAD, 1000L, 10, 0, null, args);
+        List<byte[]> sent = new ArrayList<>();
 
-        FullHttpResponse response = sendPost("/records", body);
+        FullHttpResponse response = sendPost("/records", body, sent);
 
         assertEquals(HttpResponseStatus.OK, response.status());
+        assertEquals(1, sent.size());
+        assertArrayEquals(body, sent.get(0));
         response.release();
     }
 
@@ -41,10 +47,13 @@ class RecordHandlerTest {
         byte[] entry = RecordWriter.logEntry(null, SIGNATURE, THREAD, 1000L, 10, 0, null, args);
         byte[] exit = RecordWriter.logExit(null, THREAD, 2000L, ret, false);
         byte[] body = concat(entry, exit);
+        List<byte[]> sent = new ArrayList<>();
 
-        FullHttpResponse response = sendPost("/records", body);
+        FullHttpResponse response = sendPost("/records", body, sent);
 
         assertEquals(HttpResponseStatus.OK, response.status());
+        assertEquals(1, sent.size());
+        assertArrayEquals(body, sent.get(0));
         response.release();
     }
 
@@ -53,10 +62,12 @@ class RecordHandlerTest {
     @Test
     void postMalformedDataReturns400() {
         byte[] body = new byte[]{0x01, 0x00, 0x00, 0x00, (byte) 0xFF};
+        List<byte[]> sent = new ArrayList<>();
 
-        FullHttpResponse response = sendPost("/records", body);
+        FullHttpResponse response = sendPost("/records", body, sent);
 
         assertEquals(HttpResponseStatus.BAD_REQUEST, response.status());
+        assertTrue(sent.isEmpty());
         response.release();
     }
 
@@ -64,9 +75,12 @@ class RecordHandlerTest {
 
     @Test
     void wrongPathReturns404() {
-        FullHttpResponse response = sendPost("/unknown", new byte[0]);
+        List<byte[]> sent = new ArrayList<>();
+
+        FullHttpResponse response = sendPost("/unknown", new byte[0], sent);
 
         assertEquals(HttpResponseStatus.NOT_FOUND, response.status());
+        assertTrue(sent.isEmpty());
         response.release();
     }
 
@@ -74,21 +88,37 @@ class RecordHandlerTest {
 
     @Test
     void getMethodReturns405() {
-        EmbeddedChannel channel = new EmbeddedChannel(new RecordHandler());
+        List<byte[]> sent = new ArrayList<>();
+        RecordForwarder stub = stubForwarder(sent);
+        EmbeddedChannel channel = new EmbeddedChannel(new RecordHandler(stub));
         FullHttpRequest request = new DefaultFullHttpRequest(
                 HttpVersion.HTTP_1_1, HttpMethod.GET, "/records");
         channel.writeInbound(request);
 
         FullHttpResponse response = channel.readOutbound();
         assertEquals(HttpResponseStatus.METHOD_NOT_ALLOWED, response.status());
+        assertTrue(sent.isEmpty());
         response.release();
         channel.finish();
     }
 
     // --- Utilities ---
 
-    private static FullHttpResponse sendPost(String uri, byte[] body) {
-        EmbeddedChannel channel = new EmbeddedChannel(new RecordHandler());
+    private static RecordForwarder stubForwarder(List<byte[]> sent) {
+        return new RecordForwarder() {
+            @Override
+            public void send(byte[] rawRecords) {
+                sent.add(rawRecords);
+            }
+
+            @Override
+            public void close() {}
+        };
+    }
+
+    private static FullHttpResponse sendPost(String uri, byte[] body, List<byte[]> sent) {
+        RecordForwarder stub = stubForwarder(sent);
+        EmbeddedChannel channel = new EmbeddedChannel(new RecordHandler(stub));
         FullHttpRequest request = new DefaultFullHttpRequest(
                 HttpVersion.HTTP_1_1, HttpMethod.POST, uri, Unpooled.wrappedBuffer(body));
         request.headers().set("Content-Type", "application/octet-stream");

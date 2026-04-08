@@ -41,11 +41,16 @@ public final class RecordDrainer {
     // --- Drain loop ---
 
     private void drainLoop() {
+        boolean hasUnflushed = false;
         while (running) {
             try {
                 byte[] record = buffer.poll();
                 if (record != null) {
                     destination.accept(record);
+                    hasUnflushed = true;
+                } else if (hasUnflushed) {
+                    destination.flush();
+                    hasUnflushed = false;
                 } else {
                     Thread.onSpinWait();
                 }

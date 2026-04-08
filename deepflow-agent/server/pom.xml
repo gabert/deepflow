@@ -15,5 +15,6 @@
 
     <modules>
         <module>record-collector-server</module>
+        <module>record-processor-server</module>
     </modules>
 </project>

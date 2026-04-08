@@ -14,8 +14,10 @@ public class AgentConfig {
     private final boolean expandThis;
     private final boolean serializeValues;
     private final String destination;
+    private final Map<String, String> configMap;
 
     private AgentConfig(Map<String, String> configMap) {
+        this.configMap = Collections.unmodifiableMap(configMap);
         String matcherInclude = configMap.getOrDefault("matchers_include", "");
         if (!matcherInclude.isEmpty()) {
             this.matchersInclude.addAll(Arrays.stream(matcherInclude.split(","))
@@ -72,6 +74,10 @@ public class AgentConfig {
 
     public String getDestination() {
         return destination;
+    }
+
+    public Map<String, String> getConfigMap() {
+        return configMap;
     }
 
     public static AgentConfig getInstance(String agentArgs) throws IOException {

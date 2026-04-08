@@ -26,10 +26,14 @@ public class DeepFlowAgent {
         try {
             agentConfig = AgentConfig.getInstance(agentArgs);
         } catch (Exception e) {
-            System.err.println("Failed to load agent config. Agent disabled.");
+            System.err.println("[DeepFlow] Failed to load agent config. Agent disabled.");
             e.printStackTrace();
             return;
         }
+
+        System.out.println("[DeepFlow] Agent attached — destination=" + agentConfig.getDestination()
+                + ", matchers=" + agentConfig.getMatchersInclude().size() + " include / "
+                + agentConfig.getMatchersExclude().size() + " exclude");
 
         DeepFlowAdvice.setup(agentConfig);
 

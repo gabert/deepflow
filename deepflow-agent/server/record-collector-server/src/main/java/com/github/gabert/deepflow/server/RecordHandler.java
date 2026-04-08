@@ -19,6 +19,12 @@ import java.nio.charset.StandardCharsets;
 public class RecordHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     static final String RECORDS_PATH = "/records";
 
+    private final RecordForwarder forwarder;
+
+    public RecordHandler(RecordForwarder forwarder) {
+        this.forwarder = forwarder;
+    }
+
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
         if (!RECORDS_PATH.equals(request.uri())) {
@@ -43,9 +49,7 @@ public class RecordHandler extends SimpleChannelInboundHandler<FullHttpRequest> 
             return;
         }
 
-        for (String line : result.lines()) {
-            System.out.println(line);
-        }
+        forwarder.send(body);
 
         sendResponse(ctx, HttpResponseStatus.OK, "OK");
     }
