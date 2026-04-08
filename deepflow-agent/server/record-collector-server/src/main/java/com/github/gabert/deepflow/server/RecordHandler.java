@@ -1,6 +1,5 @@
 package com.github.gabert.deepflow.server;
 
-import com.github.gabert.deepflow.recorder.destination.RecordRenderer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
@@ -39,15 +38,6 @@ public class RecordHandler extends SimpleChannelInboundHandler<FullHttpRequest> 
 
         byte[] body = new byte[request.content().readableBytes()];
         request.content().readBytes(body);
-
-        RecordRenderer.Result result;
-        try {
-            result = RecordRenderer.render(body);
-        } catch (Exception e) {
-            sendResponse(ctx, HttpResponseStatus.BAD_REQUEST,
-                    "Malformed record data: " + e.getMessage());
-            return;
-        }
 
         forwarder.send(body);
 

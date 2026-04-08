@@ -1,7 +1,5 @@
 package com.github.gabert.deepflow.server;
 
-import com.github.gabert.deepflow.codec.Codec;
-import com.github.gabert.deepflow.recorder.record.RecordWriter;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
@@ -14,20 +12,17 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class RecordHandlerTest {
 
-    private static final String SIGNATURE = "com.example::Foo.bar(java.lang::String) -> void [public]";
-    private static final String THREAD = "main";
-
     // --- Happy path ---
 
     @Test
-    void postValidRecordReturns200() throws Exception {
-        byte[] args = Codec.encode(new Object[]{"hello"});
-        byte[] body = RecordWriter.logEntry(null, SIGNATURE, THREAD, 1000L, 10, 0, null, args);
+    void postRecordsReturns200AndForwardsBytes() {
+        byte[] body = randomBytes(64);
         List<byte[]> sent = new ArrayList<>();
 
         FullHttpResponse response = sendPost("/records", body, sent);
@@ -35,39 +30,6 @@ class RecordHandlerTest {
         assertEquals(HttpResponseStatus.OK, response.status());
         assertEquals(1, sent.size());
         assertArrayEquals(body, sent.get(0));
-        response.release();
-    }
-
-    // --- Full method trace ---
-
-    @Test
-    void postFullMethodTraceReturns200() throws Exception {
-        byte[] args = Codec.encode(new Object[]{"x"});
-        byte[] ret = Codec.encode(42);
-        byte[] entry = RecordWriter.logEntry(null, SIGNATURE, THREAD, 1000L, 10, 0, null, args);
-        byte[] exit = RecordWriter.logExit(null, THREAD, 2000L, ret, false);
-        byte[] body = concat(entry, exit);
-        List<byte[]> sent = new ArrayList<>();
-
-        FullHttpResponse response = sendPost("/records", body, sent);
-
-        assertEquals(HttpResponseStatus.OK, response.status());
-        assertEquals(1, sent.size());
-        assertArrayEquals(body, sent.get(0));
-        response.release();
-    }
-
-    // --- Malformed data ---
-
-    @Test
-    void postMalformedDataReturns400() {
-        byte[] body = new byte[]{0x01, 0x00, 0x00, 0x00, (byte) 0xFF};
-        List<byte[]> sent = new ArrayList<>();
-
-        FullHttpResponse response = sendPost("/records", body, sent);
-
-        assertEquals(HttpResponseStatus.BAD_REQUEST, response.status());
-        assertTrue(sent.isEmpty());
         response.release();
     }
 
@@ -104,6 +66,12 @@ class RecordHandlerTest {
 
     // --- Utilities ---
 
+    private static byte[] randomBytes(int size) {
+        byte[] bytes = new byte[size];
+        new Random().nextBytes(bytes);
+        return bytes;
+    }
+
     private static RecordForwarder stubForwarder(List<byte[]> sent) {
         return new RecordForwarder() {
             @Override
@@ -126,19 +94,5 @@ class RecordHandlerTest {
         FullHttpResponse response = channel.readOutbound();
         channel.finish();
         return response;
-    }
-
-    private static byte[] concat(byte[]... arrays) {
-        int totalLength = 0;
-        for (byte[] array : arrays) {
-            totalLength += array.length;
-        }
-        byte[] result = new byte[totalLength];
-        int pos = 0;
-        for (byte[] array : arrays) {
-            System.arraycopy(array, 0, result, pos, array.length);
-            pos += array.length;
-        }
-        return result;
     }
 }

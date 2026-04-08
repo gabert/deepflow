@@ -1,6 +1,5 @@
 package com.github.gabert.deepflow.server;
 
-import com.github.gabert.deepflow.recorder.record.RecordWriter;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -22,6 +21,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -55,9 +55,8 @@ class KafkaIntegrationTest {
 
     @Test
     void payloadArrivesInKafkaBytePerfect() throws Exception {
-        byte[] payload = RecordWriter.logEntrySimple(
-                "s1", "com.x::M.m() -> void [public]", "t1",
-                1000L, 1, 0);
+        byte[] payload = new byte[32];
+        new Random().nextBytes(payload);
 
         try (KafkaConsumer<String, byte[]> consumer = createConsumer()) {
             int httpStatus = postRecords(payload);
