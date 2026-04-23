@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Starts the Spring Boot demo with the agent, exercises the API with
-# two separate users (two HTTP sessions), prints the trace output, and
-# tears down.
+# Starts the Spring Boot demo with the agent, runs the demo scenario
+# (one request that exercises create, rename, merge, transfer), prints
+# the trace output, and tears down.
 #
 set -euo pipefail
 
@@ -11,10 +11,6 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DUMP_DIR="D:/temp"
 PORT=8080
 BASE_URL="http://localhost:$PORT"
-
-# Cookie jars — each simulates a distinct user / HTTP session
-ALICE_JAR=$(mktemp)
-BOB_JAR=$(mktemp)
 
 # --- Note existing session dirs so we can find the new one ---
 BEFORE_DIRS=$(ls -1d "$DUMP_DIR"/SESSION-*/ 2>/dev/null || true)
@@ -33,7 +29,6 @@ cleanup() {
     sleep 3
     kill "$MVN_PID" 2>/dev/null || true
     wait "$MVN_PID" 2>/dev/null || true
-    rm -f "$ALICE_JAR" "$BOB_JAR"
     echo "    Done"
 }
 trap cleanup EXIT
@@ -49,45 +44,11 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
-# --- Alice: creates Tolkien and The Hobbit ---
+# --- Run the demo scenario (single request, full trace) ---
 echo ""
-echo ">>> Alice (session 1)..."
-
-echo -n "    POST /api/authors (Tolkien) ... "
-curl -sf -b "$ALICE_JAR" -c "$ALICE_JAR" \
-    -X POST "$BASE_URL/api/authors?name=Tolkien"
-echo ""
-
-echo -n "    POST /api/authors/1/books (The Hobbit) ... "
-curl -sf -b "$ALICE_JAR" -c "$ALICE_JAR" \
-    -X POST "$BASE_URL/api/authors/1/books?title=The+Hobbit&isbn=978-0-618-00221-3&year=1937"
-echo ""
-
-# --- Bob: creates Asimov and Foundation ---
-echo ""
-echo ">>> Bob (session 2)..."
-
-echo -n "    POST /api/authors (Asimov) ... "
-curl -sf -b "$BOB_JAR" -c "$BOB_JAR" \
-    -X POST "$BASE_URL/api/authors?name=Asimov"
-echo ""
-
-echo -n "    POST /api/authors/2/books (Foundation) ... "
-curl -sf -b "$BOB_JAR" -c "$BOB_JAR" \
-    -X POST "$BASE_URL/api/authors/2/books?title=Foundation&isbn=978-0-553-29335-7&year=1951"
-echo ""
-
-# --- Both users list everything ---
-echo ""
-echo ">>> Alice lists books..."
-echo -n "    GET  /api/books ... "
-curl -sf -b "$ALICE_JAR" -c "$ALICE_JAR" "$BASE_URL/api/books"
-echo ""
-
-echo ""
-echo ">>> Bob lists authors..."
-echo -n "    GET  /api/authors ... "
-curl -sf -b "$BOB_JAR" -c "$BOB_JAR" "$BASE_URL/api/authors"
+echo ">>> Running demo scenario (create, rename, merge, transfer)..."
+echo -n "    POST /api/library/demo-scenario ... "
+curl -sf -X POST "$BASE_URL/api/library/demo-scenario" | python -m json.tool 2>/dev/null || true
 echo ""
 
 # --- Let the agent flush ---

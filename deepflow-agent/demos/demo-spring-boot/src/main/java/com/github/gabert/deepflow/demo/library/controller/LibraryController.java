@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -53,6 +54,11 @@ public class LibraryController {
     @GetMapping("/authors/{authorId}/books")
     public List<BookSO> booksByAuthor(@PathVariable Long authorId) {
         return libraryService.booksByAuthor(authorId);
+    }
+
+    @PostMapping("/library/demo-scenario")
+    public Map<String, Object> runDemoScenario() {
+        return libraryService.runDemoScenario();
     }
 
     @DeleteMapping("/books/{id}")
