@@ -79,47 +79,52 @@ public class LibraryDAO {
         bookRepository.delete(entity);
     }
 
-    @Transactional
-    public AuthorDTO renameAuthor(Long authorId, String newName) {
-        AuthorEntity author = authorRepository.findById(authorId)
-                .orElseThrow(() -> new IllegalArgumentException("Author not found: " + authorId));
-        author.setName(newName);
-        author = authorRepository.save(author);
-        return toAuthorDTO(author);
+    public AuthorEntity findAuthorEntityById(Long id) {
+        return authorRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Author not found: " + id));
     }
 
-    @Transactional
-    public BookDTO transferBook(Long bookId, Long toAuthorId) {
-        BookEntity book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new IllegalArgumentException("Book not found: " + bookId));
-        AuthorEntity oldAuthor = book.getAuthor();
-        AuthorEntity newAuthor = authorRepository.findById(toAuthorId)
-                .orElseThrow(() -> new IllegalArgumentException("Author not found: " + toAuthorId));
-
-        oldAuthor.getBooks().remove(book);
-        book.setAuthor(newAuthor);
-        newAuthor.getBooks().add(book);
-        book = bookRepository.save(book);
-        return toBookDTO(book);
-    }
-
-    @Transactional
-    public List<BookDTO> mergeAuthors(Long sourceAuthorId, Long targetAuthorId) {
-        AuthorEntity source = authorRepository.findById(sourceAuthorId)
-                .orElseThrow(() -> new IllegalArgumentException("Author not found: " + sourceAuthorId));
-        AuthorEntity target = authorRepository.findById(targetAuthorId)
-                .orElseThrow(() -> new IllegalArgumentException("Author not found: " + targetAuthorId));
-
-        List<BookEntity> booksToMove = new ArrayList<>(source.getBooks());
-        for (BookEntity book : booksToMove) {
-            source.getBooks().remove(book);
-            book.setAuthor(target);
-            target.getBooks().add(book);
+    public String normalizeIsbns(AuthorEntity author) {
+        StringBuilder report = new StringBuilder();
+        for (BookEntity book : author.getBooks()) {
+            String original = book.getIsbn();
+            // BUG: modifies the entity field directly instead of building
+            //      a separate export string — the JPA-managed entity is
+            //      now dirty and will be flushed on next transaction
+            book.setIsbn(original.replace("-", ""));
+            report.append(book.getTitle())
+                  .append(": ")
+                  .append(original)
+                  .append(" -> ")
+                  .append(book.getIsbn())
+                  .append("\n");
         }
-        bookRepository.saveAll(booksToMove);
-        authorRepository.delete(source);
+        return report.toString();
+    }
 
-        return target.getBooks().stream()
+    public String buildDisplayName(AuthorEntity author) {
+        String fullName = author.getName();
+        // BUG: writes the reformatted name back to the entity
+        //      instead of returning it as a separate string
+        String[] parts = fullName.split(" ");
+        String displayName = parts[parts.length - 1] + ", "
+                + fullName.substring(0, fullName.lastIndexOf(" "));
+        author.setName(displayName);
+        return displayName;
+    }
+
+    @Transactional
+    public AuthorDTO flushAndReload(Long authorId) {
+        // Forces JPA to flush the dirty entities, persisting the
+        // accidental mutations from normalizeIsbns / buildDisplayName
+        authorRepository.flush();
+        AuthorEntity fresh = authorRepository.findById(authorId)
+                .orElseThrow(() -> new IllegalArgumentException("Author not found: " + authorId));
+        return toAuthorDTO(fresh);
+    }
+
+    public List<BookDTO> findBooksByAuthorEntity(AuthorEntity author) {
+        return author.getBooks().stream()
                 .map(this::toBookDTO)
                 .toList();
     }

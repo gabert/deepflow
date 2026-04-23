@@ -9,29 +9,22 @@ delimiter = ";"
 
 class LineProcessor:
     def __init__(self, base_formater):
-        self.depth = -1
+        self.depth = 0
         self.method_id = -1
         self.parent_stack = []
         self.base_formater = base_formater
 
     def process_dump_line(self, line):
-        record = self.__parse_line(line)
-
-        if record['type'] == "AR" or record['type'] == "RE":
-            record = self.__compute_hash(record)
-
-        return record
-
-    def __parse_line(self, line):
-        parts = line.split(delimiter)
-
+        parts = line.split(delimiter, 1)
         record_type = parts[0]
-        value = ";".join(parts[1:])
+        value = parts[1] if len(parts) > 1 else ""
+
+        if record_type == 'CD':
+            self.depth = int(value)
 
         parent_method_id = self.parent_stack[-1] if self.parent_stack else None
 
         if record_type == 'MS':
-            self.depth += 1
             self.method_id += 1
             self.parent_stack.append(self.method_id)
 
@@ -43,18 +36,14 @@ class LineProcessor:
             "parent_method_id": parent_method_id,
         }
 
-        if record_type == 'ME':
-            self.depth -= 1
-            self.parent_stack.pop()
+        if record_type == 'TE':
+            if self.parent_stack:
+                self.parent_stack.pop()
 
-        return record
-
-    def __compute_hash(self, record):
-        json_string = record['value']
-        data_hashed = hasher.hash_update(json_string)
-
-        record['raw_data'] = metadata_strip.extract_data(data_hashed)
-        record['meta_data'] = metadata_strip.extract_metadata(data_hashed)
+        if record_type in ("AR", "RE"):
+            data_hashed = hasher.hash_update(value)
+            record['raw_data'] = metadata_strip.extract_data(data_hashed)
+            record['meta_data'] = metadata_strip.extract_metadata(data_hashed)
 
         return record
 
@@ -141,9 +130,6 @@ def open_destination_file(dst_file_path, compress):
 
 
 if __name__ == '__main__':
-    process_session('D:\\temp\\SESSION-20260210-204232',
+    process_session('D:\\temp\\SESSION-20260423-205003',
                     destination_format='llm',
-                    compress=True)
-    # process_session('D:\\temp\\SESSION-20240603-221554',
-    #                 destination_format='yaml',
-    #                 compress=False)
+                    compress=False)

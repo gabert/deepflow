@@ -1,5 +1,6 @@
 package com.github.gabert.deepflow.demo.library.service;
 
+import com.github.gabert.deepflow.demo.library.model.AuthorEntity;
 import com.github.gabert.deepflow.demo.library.repository.AuthorDTO;
 import com.github.gabert.deepflow.demo.library.repository.BookDTO;
 import com.github.gabert.deepflow.demo.library.repository.LibraryDAO;
@@ -65,55 +66,53 @@ public class LibraryService {
     public Map<String, Object> runDemoScenario() {
         Map<String, Object> result = new LinkedHashMap<>();
 
-        // Step 1: Create authors
+        // Step 1: Create an author with three books
         AuthorSO tolkien = createAuthor("J.R.R. Tolkien");
-        AuthorSO asimov = createAuthor("Isaac Asimov");
-        AuthorSO tolkienTypo = createAuthor("J.R.R. Tolkein");  // deliberate typo
-        result.put("created_authors", List.of(tolkien, asimov, tolkienTypo));
-
-        // Step 2: Add books to authors
         BookSO hobbit = addBook(tolkien.getId(), "The Hobbit", "978-0-618-00221-3", 1937);
         BookSO lotr = addBook(tolkien.getId(), "The Lord of the Rings", "978-0-618-64015-7", 1954);
-        BookSO foundation = addBook(asimov.getId(), "Foundation", "978-0-553-29335-7", 1951);
-        BookSO iRobot = addBook(asimov.getId(), "I, Robot", "978-0-553-29438-5", 1950);
-        BookSO silmarillion = addBook(tolkienTypo.getId(), "The Silmarillion", "978-0-618-39111-3", 1977);
-        result.put("created_books", List.of(hobbit, lotr, foundation, iRobot, silmarillion));
+        BookSO silmarillion = addBook(tolkien.getId(), "The Silmarillion", "978-0-618-39111-3", 1977);
+        result.put("created_books", List.of(hobbit, lotr, silmarillion));
 
-        // Step 3: Fix the typo — rename "Tolkein" to "Tolkien"
-        AuthorSO fixedAuthor = renameAuthor(tolkienTypo.getId(), "J.R.R. Tolkien (duplicate)");
-        result.put("renamed_author", fixedAuthor);
+        // Step 2: "Prepare catalog export" — looks read-only, but isn't
+        Map<String, Object> catalogExport = prepareCatalogExport(tolkien.getId());
+        result.put("catalog_export", catalogExport);
 
-        // Step 4: Merge the duplicate into the real Tolkien
-        List<BookSO> mergedBooks = mergeAuthors(fixedAuthor.getId(), tolkien.getId());
-        result.put("merged_tolkien_books", mergedBooks);
-
-        // Step 5: Oops — "I, Robot" is actually a short story collection.
-        //         Transfer it to a new author to simulate a correction.
-        AuthorSO binder = createAuthor("Eando Binder");
-        BookSO transferred = transferBook(iRobot.getId(), binder.getId());
-        result.put("transferred_book", transferred);
-
-        // Step 6: Final state
-        result.put("all_authors", listAuthors());
-        result.put("all_books", listBooks());
+        // Step 3: Read the author back — surprise! data is corrupted
+        //         The "read-only" export silently mutated the JPA entities
+        AuthorSO afterExport = findAuthor(tolkien.getId());
+        List<BookSO> booksAfterExport = booksByAuthor(tolkien.getId());
+        result.put("author_after_export", afterExport);
+        result.put("books_after_export", booksAfterExport);
 
         return result;
     }
 
-    public AuthorSO renameAuthor(Long authorId, String newName) {
-        AuthorDTO dto = libraryDAO.renameAuthor(authorId, newName);
-        return toAuthorSO(dto);
-    }
+    public Map<String, Object> prepareCatalogExport(Long authorId) {
+        Map<String, Object> export = new LinkedHashMap<>();
 
-    public BookSO transferBook(Long bookId, Long toAuthorId) {
-        BookDTO dto = libraryDAO.transferBook(bookId, toAuthorId);
-        return toBookSO(dto);
-    }
+        // Load the JPA entity — this is the managed instance
+        AuthorEntity author = libraryDAO.findAuthorEntityById(authorId);
+        export.put("original_author", author.getName());
 
-    public List<BookSO> mergeAuthors(Long sourceAuthorId, Long targetAuthorId) {
-        return libraryDAO.mergeAuthors(sourceAuthorId, targetAuthorId).stream()
+        // "Normalize ISBNs for export" — BUG: mutates the entities
+        String isbnReport = libraryDAO.normalizeIsbns(author);
+        export.put("isbn_normalization", isbnReport);
+
+        // "Build display name for export" — BUG: mutates the entity
+        String displayName = libraryDAO.buildDisplayName(author);
+        export.put("display_name", displayName);
+
+        // Read back the books — they already have mutated ISBNs
+        List<BookSO> booksSnapshot = libraryDAO.findBooksByAuthorEntity(author).stream()
                 .map(this::toBookSO)
                 .toList();
+        export.put("books_snapshot", booksSnapshot);
+
+        // Flush to DB — the accidental mutations are now persisted
+        AuthorDTO flushed = libraryDAO.flushAndReload(authorId);
+        export.put("flushed_author", toAuthorSO(flushed));
+
+        return export;
     }
 
     private AuthorSO toAuthorSO(AuthorDTO dto) {
