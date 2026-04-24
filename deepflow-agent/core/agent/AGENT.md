@@ -56,7 +56,8 @@ prints to `stderr` and continues — the target application is never affected.
 When `serialize_values=true` (default), the full pipeline runs: CBOR-encode
 arguments/return values, wrap in envelopes, write binary record groups
 (`METHOD_START` + `THIS_INSTANCE`/`ARGUMENTS` on entry;
-`RETURN`/`EXCEPTION` + `METHOD_END` on exit).
+`RETURN`/`EXCEPTION` + `METHOD_END` on exit; optionally `ARGUMENTS_EXIT`
+when `AX` is enabled).
 
 When `serialize_values=false`, only structural records are emitted
 (`METHOD_START` on entry, `METHOD_END` on exit) — no CBOR serialization
@@ -66,6 +67,33 @@ The branching happens in `DeepFlowAdvice.recordEntry`/`recordExit`, which call
 different `RecordWriter` methods (`logEntry` vs `logEntrySimple`, `logExit` vs
 `logExitSimple`). Everything downstream (buffer, drainer, destination) is
 unaware of the distinction.
+
+### Call tracking with CI/PI
+
+Each method invocation gets a unique **call ID** (CI), and records the
+**parent call ID** (PI) of its caller (-1 for root calls). This replaces
+depth-based tracking and correctly handles reactive/event-loop frameworks
+where one thread interleaves calls from multiple sessions.
+
+Call IDs are generated from a per-thread counter (`ThreadLocal<Long>`).
+Parent tracking uses per-session call stacks
+(`ThreadLocal<Map<String, Deque<Long>>>`) — on entry the current call ID
+is pushed, on exit it is popped.
+
+### Tag-based emit configuration
+
+All output tags (except MS, which is always emitted) are configurable via
+the `emit_tags` config property. When a tag is disabled, the agent skips
+both serialization and output. Per-tag flags (`EMIT_TI`, `EMIT_AR`,
+`EMIT_RT`, `EMIT_AX`) are checked before encoding to avoid unnecessary
+work.
+
+### Nanosecond timestamps
+
+Timestamps use `System.nanoTime()` for sub-microsecond precision on
+duration calculations. Note that `nanoTime()` values are relative to an
+arbitrary JVM-specific origin — they are only meaningful as deltas within
+the same session.
 
 ### Two different "session IDs"
 

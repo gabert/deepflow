@@ -42,6 +42,8 @@ header. A reader consumes frames until the remaining bytes are fewer than 5
 | `0x05` | METHOD_END         | Method exit metadata                             |
 | `0x06` | THIS_INSTANCE      | Full CBOR-encoded `this` object                  |
 | `0x07` | THIS_INSTANCE_REF  | Object ID reference to a previously seen `this`  |
+| `0x08` | ARGUMENTS_EXIT     | Encoded method arguments captured at exit         |
+| `0x09` | VERSION            | Format version (major.minor)                     |
 
 ## Record grouping
 
@@ -62,6 +64,14 @@ RETURN
 METHOD_END
 ```
 
+**Method exit — normal return with exit args** (emitted by `RecordWriter.logExitWithArgs`):
+
+```
+RETURN
+METHOD_END
+ARGUMENTS_EXIT
+```
+
 **Method exit — exception** (emitted by `RecordWriter.logExitException`):
 
 ```
@@ -70,7 +80,8 @@ METHOD_END
 ```
 
 A full method invocation therefore produces 4 records (no `this`), 5 records
-(with `this`), and nested calls interleave naturally.
+(with `this`), and nested calls interleave naturally. When `AX` is enabled
+via `emit_tags`, exit records include an additional `ARGUMENTS_EXIT` frame.
 
 When `serialize_values=false`, only the structural records are emitted — no
 CBOR-encoded data is captured:
@@ -94,9 +105,9 @@ CBOR serialization occurs.
 **Full serialization example** (`serialize_values=true`, the default):
 
 ```
-METHOD_START (outer)         depth=0
+METHOD_START (outer)         call_id=0, parent_call_id=-1
   ARGUMENTS (outer)
-  METHOD_START (inner)       depth=1
+  METHOD_START (inner)       call_id=1, parent_call_id=0
     ARGUMENTS (inner)
     RETURN (inner)
     METHOD_END (inner)
@@ -116,9 +127,11 @@ METHOD_START (outer)         depth=0
 | 4+I          | S bytes | UTF-8    | signature    | Method signature string (see format below)|
 | 4+I+S        | 2 bytes | `uint16` | thread_len   | Byte length of `thread_name`              |
 | 6+I+S        | T bytes | UTF-8    | thread_name  | Name of the executing thread              |
-| 6+I+S+T      | 8 bytes | `int64`  | timestamp    | Epoch milliseconds (`System.currentTimeMillis()`) |
-| 14+I+S+T     | 4 bytes | `int32`  | caller_line  | Source line number of the call site (0 if unknown) |
-| 18+I+S+T     | 4 bytes | `int32`  | depth        | Call depth (0 = top-level, 1 = one level nested, ...) |
+| 6+I+S+T      | 8 bytes | `int64`  | timestamp      | Nanoseconds (`System.nanoTime()`) at method entry |
+| 14+I+S+T     | 4 bytes | `int32`  | caller_line    | Source line number of the call site (0 if unknown) |
+| 18+I+S+T     | 4 bytes | `int32`  | depth          | Call depth (legacy, not rendered — use call_id/parent_call_id) |
+| 22+I+S+T     | 8 bytes | `int64`  | call_id        | Unique ID for this method invocation (per thread) |
+| 30+I+S+T     | 8 bytes | `int64`  | parent_call_id | Call ID of the caller (-1 for root calls) |
 
 Where `I` = sid_len, `S` = sig_len, `T` = thread_len.
 
@@ -176,7 +189,7 @@ The payload is the CBOR encoding of a `Map<String, Object>` with:
 | 2       | I bytes | UTF-8    | session_id  | Logical session ID (absent when sid_len = 0) |
 | 2+I     | 2 bytes | `uint16` | thread_len  | Byte length of `thread_name`              |
 | 4+I     | T bytes | UTF-8    | thread_name | Name of the executing thread              |
-| 4+I+T   | 8 bytes | `int64`  | timestamp   | Epoch milliseconds at method exit         |
+| 4+I+T   | 8 bytes | `int64`  | timestamp   | Nanoseconds (`System.nanoTime()`) at method exit |
 
 Where `I` = sid_len, `T` = thread_len.
 
@@ -199,6 +212,25 @@ Emitted when `expand_this=false` (default). Contains only the numeric object
 identity — a lightweight reference that allows correlating method calls on the
 same instance without serializing the full object state.
 
+### ARGUMENTS_EXIT (0x08)
+
+| Offset | Size    | Type  | Field | Description                          |
+|--------|---------|-------|-------|--------------------------------------|
+| 0      | variable| bytes | cbor  | CBOR-encoded argument array at exit  |
+
+Same format as ARGUMENTS. Emitted when `AX` is enabled in `emit_tags`.
+Comparing the entry arguments (ARGUMENTS) with exit arguments (ARGUMENTS_EXIT)
+reveals which arguments were mutated during the method call.
+
+### VERSION (0x09)
+
+| Offset | Size    | Type     | Field | Description           |
+|--------|---------|----------|-------|-----------------------|
+| 0      | 2 bytes | `uint16` | major | Format major version  |
+| 2      | 2 bytes | `uint16` | minor | Format minor version  |
+
+Emitted once at session start before any trace records. Current version: 1.0.
+
 ## Text rendering
 
 The `RecordRenderer` converts binary records to semicolon-delimited text lines.
@@ -206,12 +238,14 @@ The output is a stream of strings that can be consumed by any destination —
 written to `.dft` files, sent over a network, or processed in memory. The
 mapping is:
 
-| Binary record     | Text line(s)                                      |
+| Binary record      | Text line(s)                                      |
 |--------------------|---------------------------------------------------|
-| METHOD_START       | `SI;<session_id>` (if present), `MS;<signature>`, `TN;<thread>`, `CD;<depth>`, `TS;<timestamp>`, `CL;<caller_line>` |
+| VERSION            | `VR;<major>.<minor>`                              |
+| METHOD_START       | `SI;<session_id>` (if present), `MS;<signature>`, `TN;<thread>`, `CI;<call_id>`, `PI;<parent_call_id>`, `TS;<timestamp>`, `CL;<caller_line>` |
 | THIS_INSTANCE      | `TI;<decoded JSON>`                               |
 | THIS_INSTANCE_REF  | `TI;<object_id>`                                  |
 | ARGUMENTS          | `AR;<decoded JSON>`                               |
+| ARGUMENTS_EXIT     | `AX;<decoded JSON>`                               |
 | RETURN (void)      | `RT;VOID`                                         |
 | RETURN (value)     | `RT;VALUE`, `RE;<decoded JSON>`                   |
 | EXCEPTION          | `RT;EXCEPTION`, `RE;<decoded JSON>`               |
