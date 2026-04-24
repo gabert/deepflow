@@ -9,6 +9,10 @@ public final class RecordType {
     public static final byte THIS_INSTANCE     = 0x06;
     public static final byte THIS_INSTANCE_REF = 0x07;
     public static final byte ARGUMENTS_EXIT    = 0x08;
+    public static final byte VERSION           = 0x09;
+
+    public static final short VERSION_MAJOR = 1;
+    public static final short VERSION_MINOR = 0;
 
     static final int HEADER_SIZE            = 5; // 1 byte type + 4 bytes length
     static final int SIGNATURE_LENGTH_SIZE   = Short.BYTES;

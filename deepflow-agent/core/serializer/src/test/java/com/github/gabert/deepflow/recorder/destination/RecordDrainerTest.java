@@ -29,9 +29,10 @@ class RecordDrainerTest {
         waitUntilEmpty(buffer);
         drainer.stop();
 
-        assertEquals(2, dest.records.size());
-        assertArrayEquals(new byte[]{1, 2, 3}, dest.records.get(0));
-        assertArrayEquals(new byte[]{4, 5, 6}, dest.records.get(1));
+        // First record is the version header, then the two offered records
+        assertEquals(3, dest.records.size());
+        assertArrayEquals(new byte[]{1, 2, 3}, dest.records.get(1));
+        assertArrayEquals(new byte[]{4, 5, 6}, dest.records.get(2));
         assertTrue(dest.flushed);
     }
 
@@ -55,7 +56,8 @@ class RecordDrainerTest {
 
         drainer.stop();
 
-        assertEquals(100, dest.records.size());
+        // 1 version header + 100 offered records
+        assertEquals(101, dest.records.size());
         assertTrue(dest.flushed);
     }
 
@@ -81,16 +83,17 @@ class RecordDrainerTest {
         FailOnceDestination dest = new FailOnceDestination();
         RecordDrainer drainer = new RecordDrainer(buffer, dest);
 
-        buffer.offer(new byte[]{1}); // will throw
-        buffer.offer(new byte[]{2}); // should still be processed
+        buffer.offer(new byte[]{1});
+        buffer.offer(new byte[]{2});
 
-        drainer.start();
+        drainer.start(); // version record triggers the simulated failure
         waitUntilEmpty(buffer);
         drainer.stop();
 
-        // First record caused exception, second should succeed
-        assertEquals(1, dest.records.size());
-        assertArrayEquals(new byte[]{2}, dest.records.get(0));
+        // Version record caused exception, both offered records should succeed
+        assertEquals(2, dest.records.size());
+        assertArrayEquals(new byte[]{1}, dest.records.get(0));
+        assertArrayEquals(new byte[]{2}, dest.records.get(1));
     }
 
     // --- Utilities ---

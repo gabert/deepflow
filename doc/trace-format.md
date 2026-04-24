@@ -8,6 +8,16 @@ The format is language-neutral. Any language agent can emit these tags as long a
 
 Each agent run creates a directory `SESSION-<yyyyMMdd-HHmmss>/` under the configured output location. Inside, there is one `.dft` file per thread, named `<timestamp>-<thread-name>.dft`. Lines are flushed after each record, so traces are readable while the application is still running.
 
+## Version Header
+
+The first line of every `.dft` file is a version record:
+
+```
+VR;1.0
+```
+
+This identifies the format version. Parsers should check this before processing the rest of the file.
+
 ## Record Tags
 
 A method call produces an **entry block** when the method is entered and an **exit block** when it returns. Tags appear in the order listed below.

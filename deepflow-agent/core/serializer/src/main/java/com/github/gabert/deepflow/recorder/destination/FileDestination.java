@@ -9,10 +9,11 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -23,6 +24,7 @@ public class FileDestination implements Destination {
     private final String runTimestamp;
     private final Set<String> emitTags;
     private final Map<String, BufferedWriter> writers = new LinkedHashMap<>();
+    private final List<String> pendingHeader = new ArrayList<>();
 
     public FileDestination(Map<String, String> config) {
         String dumpLocation = config.get("session_dump_location");
@@ -45,7 +47,11 @@ public class FileDestination implements Destination {
     @Override
     public void accept(byte[] record) {
         RecordRenderer.Result result = RecordRenderer.render(record, emitTags);
-        if (result.threadName() == null) return;
+        if (result.threadName() == null) {
+            // Version record has no thread — buffer its lines for file headers
+            pendingHeader.addAll(result.lines());
+            return;
+        }
 
         try {
             BufferedWriter writer = writerFor(result.threadName());
@@ -81,6 +87,10 @@ public class FileDestination implements Destination {
             Path filePath = sessionDir.resolve(runTimestamp + "-" + threadName + ".dft");
             writer = Files.newBufferedWriter(filePath, StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            for (String line : pendingHeader) {
+                writer.write(line);
+                writer.write('\n');
+            }
             writers.put(threadName, writer);
         }
         return writer;

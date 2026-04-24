@@ -75,6 +75,18 @@ public final class RecordWriter {
         return methodEnd(sessionIdBytes, threadName, timestamp);
     }
 
+    public static byte[] version(short major, short minor) {
+        byte[] payload = new byte[Short.BYTES + Short.BYTES];
+        int pos = 0;
+        pos = putShort(payload, pos, major);
+        putShort(payload, pos, minor);
+        return frame(RecordType.VERSION, payload);
+    }
+
+    public static byte[] version() {
+        return version(RecordType.VERSION_MAJOR, RecordType.VERSION_MINOR);
+    }
+
     // --- logEntry internals ---
 
     private static byte[] methodStart(byte[] sessionIdBytes, String signature, String threadName,

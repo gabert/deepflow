@@ -1,6 +1,7 @@
 package com.github.gabert.deepflow.recorder.destination;
 
 import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
+import com.github.gabert.deepflow.recorder.record.RecordWriter;
 
 import java.io.IOException;
 
@@ -25,6 +26,11 @@ public final class RecordDrainer {
 
     public void start() {
         running = true;
+        try {
+            destination.accept(RecordWriter.version());
+        } catch (Throwable t) {
+            System.err.println("Error emitting version record: " + t.getMessage());
+        }
         thread.start();
     }
 
