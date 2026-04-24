@@ -5,12 +5,6 @@ class LlmLineFormater:
         if record['type'] == 'MS':
             entries.append(f"{record['method_id']};{record['depth']};{record['type']};{record['value']}")
             entries.append(f"{record['method_id']};{record['depth']};PM;{record['parent_method_id']}")
-        elif record['type'] == 'AR':
-            entries.append(f"{record['method_id']};{record['depth']};AR;{record['raw_data']}")
-            entries.append(f"{record['method_id']};{record['depth']};AI;{record['meta_data']}")
-        elif record['type'] == 'RE':
-            entries.append(f"{record['method_id']};{record['depth']};RE;{record['raw_data']}")
-            entries.append(f"{record['method_id']};{record['depth']};RI;{record['meta_data']}")
         else:
             entries.append(f"{record['method_id']};{record['depth']};{record['type']};{record['value']}")
 

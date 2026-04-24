@@ -12,7 +12,10 @@ import net.bytebuddy.implementation.bytecode.assign.Assigner;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -25,15 +28,25 @@ public class DeepFlowAdvice {
     public static RecordBuffer RECORD_BUFFER;
     private static boolean EXPAND_THIS;
     private static boolean SERIALIZE_VALUES;
+    private static boolean EMIT_TI;
+    private static boolean EMIT_AR;
+    private static boolean EMIT_RT;
+    private static boolean EMIT_AX;
     private static volatile SessionIdResolver SESSION_ID_RESOLVER;
     private static volatile boolean JPA_PROXY_RESOLVER_INITIALIZED;
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
-    private static final ThreadLocal<Integer> CALL_DEPTH = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<Long> CALL_ID_COUNTER = ThreadLocal.withInitial(() -> 0L);
+    private static final ThreadLocal<Map<String, Deque<Long>>> CALL_STACKS =
+            ThreadLocal.withInitial(HashMap::new);
 
     public static void setup(AgentConfig config) {
         CONFIG = config;
         EXPAND_THIS = config.isExpandThis();
         SERIALIZE_VALUES = config.isSerializeValues();
+        EMIT_TI = config.shouldEmit("TI");
+        EMIT_AR = config.shouldEmit("AR");
+        EMIT_RT = config.shouldEmit("RT") || config.shouldEmit("RE");
+        EMIT_AX = config.shouldEmit("AX");
         RecorderManager manager = RecorderManager.create(config);
         RECORD_BUFFER = manager != null ? manager.getBuffer() : null;
     }
@@ -49,9 +62,10 @@ public class DeepFlowAdvice {
     @Advice.OnMethodExit(onThrowable = Throwable.class)
     public static void onExit(@Advice.Origin Method method,
                               @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returned,
-                              @Advice.Thrown Throwable throwable) {
+                              @Advice.Thrown Throwable throwable,
+                              @Advice.AllArguments Object[] allArguments) {
 
-        recordExit(method, returned, throwable);
+        recordExit(method, returned, throwable, allArguments);
     }
 
     // --- Record entry ---
@@ -63,18 +77,31 @@ public class DeepFlowAdvice {
             String signature = formatMethodSignature(method);
             String threadName = Thread.currentThread().getName();
             long timestamp = System.currentTimeMillis();
-            int depth = CALL_DEPTH.get();
-            CALL_DEPTH.set(depth + 1);
             int callerLine = STACK_WALKER
                     .walk(s -> s.skip(1).findFirst())
                     .map(StackWalker.StackFrame::getLineNumber)
                     .orElse(0);
 
             String sessionId = getResolver().resolve();
+            String sessionKey = sessionId != null ? sessionId : "";
+            Deque<Long> stack = CALL_STACKS.get().computeIfAbsent(sessionKey, k -> new ArrayDeque<>());
 
-            byte[] record = SERIALIZE_VALUES
-                    ? buildSerializedEntry(sessionId, signature, threadName, timestamp, callerLine, depth, self, allArguments)
-                    : RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine, depth);
+            long callId = CALL_ID_COUNTER.get();
+            CALL_ID_COUNTER.set(callId + 1);
+            long parentCallId = stack.isEmpty() ? -1 : stack.peek();
+            int depth = stack.size();
+            stack.push(callId);
+
+            byte[] record;
+            if (SERIALIZE_VALUES) {
+                Object selfForCapture = EMIT_TI ? self : null;
+                Object[] argsForCapture = EMIT_AR ? allArguments : null;
+                record = buildSerializedEntry(sessionId, signature, threadName, timestamp, callerLine, depth,
+                        callId, parentCallId, selfForCapture, argsForCapture);
+            } else {
+                record = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine, depth,
+                        callId, parentCallId);
+            }
 
             RECORD_BUFFER.offer(record);
         } catch (Throwable t) {
@@ -85,25 +112,42 @@ public class DeepFlowAdvice {
 
     // --- Record exit ---
 
-    public static void recordExit(Method method, Object returned, Throwable throwable) {
+    public static void recordExit(Method method, Object returned, Throwable throwable,
+                                   Object[] allArguments) {
         if (RECORD_BUFFER == null) return;
         try {
             String threadName = Thread.currentThread().getName();
             long timestamp = System.currentTimeMillis();
-            CALL_DEPTH.set(Math.max(0, CALL_DEPTH.get() - 1));
 
             String sessionId = getResolver().resolve();
+            String sessionKey = sessionId != null ? sessionId : "";
+            Deque<Long> stack = CALL_STACKS.get().get(sessionKey);
+            if (stack != null && !stack.isEmpty()) {
+                stack.pop();
+            }
 
             byte[] record;
             if (SERIALIZE_VALUES) {
-                if (throwable != null) {
-                    byte[] excCbor = Codec.encode(buildExceptionData(throwable));
-                    record = RecordWriter.logExitException(sessionId, threadName, timestamp, excCbor);
+                byte[] exitArgsCbor = (EMIT_AX && EMIT_AR) ? Codec.encode(allArguments) : null;
+
+                byte[] returnRecord;
+                if (!EMIT_RT) {
+                    returnRecord = RecordWriter.returnVoid();
+                } else if (throwable != null) {
+                    returnRecord = RecordWriter.exception(Codec.encode(buildExceptionData(throwable)));
                 } else {
                     boolean isVoid = Void.TYPE.equals(method.getGenericReturnType());
-                    byte[] returnCbor = isVoid ? null : Codec.encode(returned);
-                    record = RecordWriter.logExit(sessionId, threadName, timestamp, returnCbor, isVoid);
+                    returnRecord = isVoid
+                            ? RecordWriter.returnVoid()
+                            : RecordWriter.returnValue(Codec.encode(returned));
                 }
+
+                byte[] endRecord = RecordWriter.methodEnd(sessionId, threadName, timestamp);
+                byte[] exitArgsRecord = exitArgsCbor != null
+                        ? RecordWriter.argumentsExit(exitArgsCbor)
+                        : new byte[0];
+
+                record = concatOptional(returnRecord, exitArgsRecord, endRecord);
             } else {
                 record = RecordWriter.logExitSimple(sessionId, threadName, timestamp);
             }
@@ -128,17 +172,42 @@ public class DeepFlowAdvice {
 
     private static byte[] buildSerializedEntry(String sessionId, String signature, String threadName,
                                                 long timestamp, int callerLine, int depth,
+                                                long callId, long parentCallId,
                                                 Object self, Object[] allArguments) throws IOException {
-        byte[] argsCbor = Codec.encode(allArguments);
-        if (self == null) {
-            return RecordWriter.logEntry(sessionId, signature, threadName, timestamp, callerLine, depth, null, argsCbor);
+        byte[] startRecord = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine, depth,
+                callId, parentCallId);
+
+        byte[] thisRecord = null;
+        if (self != null) {
+            if (EXPAND_THIS) {
+                thisRecord = RecordWriter.thisInstance(Codec.encode(self));
+            } else {
+                thisRecord = RecordWriter.thisInstanceRef(ObjectIdRegistry.idOf(self));
+            }
         }
-        if (EXPAND_THIS) {
-            byte[] thisInstanceCbor = Codec.encode(self);
-            return RecordWriter.logEntry(sessionId, signature, threadName, timestamp, callerLine, depth, thisInstanceCbor, argsCbor);
+
+        byte[] argsRecord = null;
+        if (allArguments != null) {
+            argsRecord = RecordWriter.arguments(Codec.encode(allArguments));
         }
-        long thisId = ObjectIdRegistry.idOf(self);
-        return RecordWriter.logEntryWithThisRef(sessionId, signature, threadName, timestamp, callerLine, depth, thisId, argsCbor);
+
+        return concatOptional(startRecord, thisRecord, argsRecord);
+    }
+
+    private static byte[] concatOptional(byte[]... parts) {
+        int totalLen = 0;
+        for (byte[] part : parts) {
+            if (part != null) totalLen += part.length;
+        }
+        byte[] result = new byte[totalLen];
+        int pos = 0;
+        for (byte[] part : parts) {
+            if (part != null) {
+                System.arraycopy(part, 0, result, pos, part.length);
+                pos += part.length;
+            }
+        }
+        return result;
     }
 
     // --- SPI loading (lazy, deferred until first use) ---

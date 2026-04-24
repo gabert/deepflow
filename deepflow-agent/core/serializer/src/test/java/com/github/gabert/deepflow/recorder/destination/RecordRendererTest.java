@@ -22,7 +22,7 @@ class RecordRendererTest {
         byte[] args = Codec.encode(new Object[]{"hello", 42});
         long ts = 1000L;
 
-        byte[] data = RecordWriter.logEntry(SESSION, SIGNATURE, THREAD, ts, 99, 2, null, args);
+        byte[] data = RecordWriter.logEntry(SESSION, SIGNATURE, THREAD, ts, 99, 2, 5L, 3L, null, args);
         RecordRenderer.Result result = RecordRenderer.render(data);
 
         assertEquals(THREAD, result.threadName());
@@ -31,17 +31,18 @@ class RecordRendererTest {
         assertEquals("SI;" + SESSION, lines.get(0));
         assertEquals("MS;" + SIGNATURE, lines.get(1));
         assertEquals("TN;main", lines.get(2));
-        assertEquals("CD;2", lines.get(3));
-        assertEquals("TS;1000", lines.get(4));
-        assertEquals("CL;99", lines.get(5));
-        assertTrue(lines.get(6).startsWith("AR;"));
+        assertEquals("CI;5", lines.get(3));
+        assertEquals("PI;3", lines.get(4));
+        assertEquals("TS;1000", lines.get(5));
+        assertEquals("CL;99", lines.get(6));
+        assertTrue(lines.get(7).startsWith("AR;"));
     }
 
     @Test
     void renderMethodEntryWithoutSessionId() throws Exception {
         byte[] args = Codec.encode(new Object[]{"hello"});
 
-        byte[] data = RecordWriter.logEntry(null, SIGNATURE, THREAD, 1000L, 10, 0, null, args);
+        byte[] data = RecordWriter.logEntry(null, SIGNATURE, THREAD, 1000L, 10, 0, 0L, -1L, null, args);
         RecordRenderer.Result result = RecordRenderer.render(data);
 
         List<String> lines = result.lines();
@@ -106,7 +107,7 @@ class RecordRendererTest {
         byte[] args = Codec.encode(new Object[]{"x"});
         byte[] ret = Codec.encode(42);
 
-        byte[] entry = RecordWriter.logEntry(SESSION, SIGNATURE, THREAD, 1000L, 10, 0, null, args);
+        byte[] entry = RecordWriter.logEntry(SESSION, SIGNATURE, THREAD, 1000L, 10, 0, 0L, -1L, null, args);
         byte[] exit = RecordWriter.logExit(SESSION, THREAD, 2000L, ret, false);
         byte[] data = concat(entry, exit);
 
@@ -115,22 +116,23 @@ class RecordRendererTest {
         assertEquals(THREAD, result.threadName());
         List<String> lines = result.lines();
 
-        // Entry: SI, MS, TN, CD, TS, CL, AR
+        // Entry: SI, MS, TN, CI, PI, TS, CL, AR
         assertEquals("SI;" + SESSION, lines.get(0));
         assertEquals("MS;" + SIGNATURE, lines.get(1));
         assertEquals("TN;main", lines.get(2));
-        assertEquals("CD;0", lines.get(3));
-        assertEquals("TS;1000", lines.get(4));
-        assertEquals("CL;10", lines.get(5));
-        assertTrue(lines.get(6).startsWith("AR;"));
+        assertEquals("CI;0", lines.get(3));
+        assertEquals("PI;-1", lines.get(4));
+        assertEquals("TS;1000", lines.get(5));
+        assertEquals("CL;10", lines.get(6));
+        assertTrue(lines.get(7).startsWith("AR;"));
 
         // Exit: RT, RE, TN, TE
-        assertEquals("RT;VALUE", lines.get(7));
-        assertTrue(lines.get(8).startsWith("RE;"));
-        assertEquals("TN;main", lines.get(9));
-        assertEquals("TE;2000", lines.get(10));
+        assertEquals("RT;VALUE", lines.get(8));
+        assertTrue(lines.get(9).startsWith("RE;"));
+        assertEquals("TN;main", lines.get(10));
+        assertEquals("TE;2000", lines.get(11));
 
-        assertEquals(11, lines.size());
+        assertEquals(12, lines.size());
     }
 
     // --- This instance rendering ---
@@ -140,7 +142,7 @@ class RecordRendererTest {
         byte[] thisCbor = Codec.encode(Map.of("field", "value"));
         byte[] args = Codec.encode(new Object[]{});
 
-        byte[] data = RecordWriter.logEntry(null, SIGNATURE, THREAD, 1000L, 5, 0, thisCbor, args);
+        byte[] data = RecordWriter.logEntry(null, SIGNATURE, THREAD, 1000L, 5, 0, 0L, -1L, thisCbor, args);
         RecordRenderer.Result result = RecordRenderer.render(data);
 
         List<String> lines = result.lines();
@@ -154,11 +156,11 @@ class RecordRendererTest {
     void renderWithThisInstanceRef() throws Exception {
         byte[] args = Codec.encode(new Object[]{});
 
-        byte[] data = RecordWriter.logEntryWithThisRef(null, SIGNATURE, THREAD, 1000L, 5, 0, 12345L, args);
+        byte[] data = RecordWriter.logEntryWithThisRef(null, SIGNATURE, THREAD, 1000L, 5, 0, 0L, -1L, 12345L, args);
         RecordRenderer.Result result = RecordRenderer.render(data);
 
         List<String> lines = result.lines();
-        assertEquals("TI;12345", lines.get(5));
+        assertEquals("TI;12345", lines.get(6));
     }
 
     // --- Thread name extraction ---
@@ -166,7 +168,7 @@ class RecordRendererTest {
     @Test
     void threadNameFromEntryRecord() throws Exception {
         byte[] args = Codec.encode(new Object[]{});
-        byte[] data = RecordWriter.logEntry(null, SIGNATURE, "worker-1", 1000L, 1, 0, null, args);
+        byte[] data = RecordWriter.logEntry(null, SIGNATURE, "worker-1", 1000L, 1, 0, 0L, -1L, null, args);
 
         RecordRenderer.Result result = RecordRenderer.render(data);
         assertEquals("worker-1", result.threadName());

@@ -15,5 +15,6 @@
 
     <modules>
         <module>demo-spring-boot</module>
+        <module>demo-plain</module>
     </modules>
 </project>

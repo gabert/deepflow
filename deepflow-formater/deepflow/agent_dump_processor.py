@@ -1,7 +1,7 @@
 import os
 import zipfile
 
-from deepflow import hasher, metadata_strip
+from deepflow import hasher
 from deepflow.line_formater import FormaterFactory
 
 delimiter = ";"
@@ -39,11 +39,11 @@ class LineProcessor:
         if record_type == 'TE':
             if self.parent_stack:
                 self.parent_stack.pop()
+            if self.parent_stack:
+                self.method_id = self.parent_stack[-1]
 
-        if record_type in ("AR", "RE"):
-            data_hashed = hasher.hash_update(value)
-            record['raw_data'] = metadata_strip.extract_data(data_hashed)
-            record['meta_data'] = metadata_strip.extract_metadata(data_hashed)
+        if record_type in ("AR", "RE", "AX"):
+            record['value'] = hasher.hash_update(value)
 
         return record
 

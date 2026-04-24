@@ -2,9 +2,12 @@ package com.github.gabert.deepflow.agent;
 
 import java.io.*;
 import java.util.*;
+import java.util.LinkedHashSet;
 
 
 public class AgentConfig {
+    private static final String DEFAULT_EMIT_TAGS = "SI,TN,CI,PI,TS,CL,TI,AR,RT,RE,TE";
+
     private final List<String> matchersInclude = new ArrayList<>();
     private final List<String> matchersExclude = new ArrayList<>();
 
@@ -14,6 +17,7 @@ public class AgentConfig {
     private final boolean expandThis;
     private final boolean serializeValues;
     private final String destination;
+    private final Set<String> emitTags;
     private final Map<String, String> configMap;
 
     private AgentConfig(Map<String, String> configMap) {
@@ -40,6 +44,17 @@ public class AgentConfig {
         this.expandThis = Boolean.parseBoolean(configMap.getOrDefault("expand_this", "false"));
         this.serializeValues = Boolean.parseBoolean(configMap.getOrDefault("serialize_values", "true"));
         this.destination = configMap.getOrDefault("destination", "file");
+
+        String tagsValue = configMap.getOrDefault("emit_tags", DEFAULT_EMIT_TAGS);
+        Set<String> tags = new LinkedHashSet<>();
+        tags.add("MS");
+        for (String tag : tagsValue.split(",")) {
+            String t = tag.trim().toUpperCase();
+            if (!t.isEmpty()) {
+                tags.add(t);
+            }
+        }
+        this.emitTags = Collections.unmodifiableSet(tags);
 
         publishSystemProperties(configMap);
     }
@@ -74,6 +89,14 @@ public class AgentConfig {
 
     public String getDestination() {
         return destination;
+    }
+
+    public Set<String> getEmitTags() {
+        return emitTags;
+    }
+
+    public boolean shouldEmit(String tag) {
+        return emitTags.contains(tag);
     }
 
     public Map<String, String> getConfigMap() {

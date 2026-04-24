@@ -30,7 +30,7 @@ class FileDestinationTest {
     void singleThreadProducesOneFile(@TempDir Path tempDir) throws Exception {
         FileDestination dest = createDestination(tempDir);
 
-        byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0, null, Codec.encode(new Object[]{}));
+        byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0, 0L, -1L, null, Codec.encode(new Object[]{}));
         byte[] exit = RecordWriter.logExit(null, "main", 2000L, null, true);
 
         dest.accept(entry);
@@ -55,10 +55,10 @@ class FileDestinationTest {
     void twoThreadsProduceTwoFiles(@TempDir Path tempDir) throws Exception {
         FileDestination dest = createDestination(tempDir);
 
-        byte[] mainEntry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0, null, Codec.encode(new Object[]{}));
+        byte[] mainEntry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0, 0L, -1L, null, Codec.encode(new Object[]{}));
         byte[] mainExit = RecordWriter.logExit(null, "main", 2000L, null, true);
 
-        byte[] workerEntry = RecordWriter.logEntry(null, SIGNATURE, "worker-1", 1500L, 20, 0, null, Codec.encode(new Object[]{}));
+        byte[] workerEntry = RecordWriter.logEntry(null, SIGNATURE, "worker-1", 1500L, 20, 0, 1L, -1L, null, Codec.encode(new Object[]{}));
         byte[] workerExit = RecordWriter.logExit(null, "worker-1", 2500L, null, true);
 
         dest.accept(mainEntry);
@@ -87,11 +87,12 @@ class FileDestinationTest {
 
         byte[] args = Codec.encode(new Object[]{"hello"});
         byte[] ret = Codec.encode(42);
-        byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0, null, args);
+        byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0, 0L, -1L, null, args);
         byte[] exit = RecordWriter.logExit(null, "main", 2000L, ret, false);
 
-        RecordRenderer.Result entryRendered = RecordRenderer.render(entry);
-        RecordRenderer.Result exitRendered = RecordRenderer.render(exit);
+        Set<String> defaultTags = Set.of("MS", "SI", "TN", "CI", "PI", "TS", "CL", "TI", "AR", "RT", "RE", "TE");
+        RecordRenderer.Result entryRendered = RecordRenderer.render(entry, defaultTags);
+        RecordRenderer.Result exitRendered = RecordRenderer.render(exit, defaultTags);
         List<String> expectedLines = new ArrayList<>();
         expectedLines.addAll(entryRendered.lines());
         expectedLines.addAll(exitRendered.lines());
@@ -117,7 +118,7 @@ class FileDestinationTest {
 
         byte[] args = Codec.encode(new Object[]{});
         byte[] exc = Codec.encode(Map.of("message", "NPE"));
-        byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0, null, args);
+        byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0, 0L, -1L, null, args);
         byte[] exit = RecordWriter.logExitException(null, "main", 2000L, exc);
 
         dest.accept(entry);
@@ -140,7 +141,7 @@ class FileDestinationTest {
     void linesVisibleBeforeClose(@TempDir Path tempDir) throws Exception {
         FileDestination dest = createDestination(tempDir);
 
-        byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0, null, Codec.encode(new Object[]{}));
+        byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0, 0L, -1L, null, Codec.encode(new Object[]{}));
         dest.accept(entry);
 
         // Read before close — lines should already be on disk
