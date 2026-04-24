@@ -62,7 +62,7 @@ SessionIdResolver.resolve()
 When the resolver returns `null`, no `SI;` line appears in the output and the
 `sid_len` field in the binary payload is 0.
 
-See [RECORD-FORMAT.md](../../core/record-format/RECORD-FORMAT.md) for the binary
+See [record-format.md](record-format.md) for the binary
 layout of the session ID field.
 
 ## Available implementations

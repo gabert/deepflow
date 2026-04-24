@@ -136,7 +136,7 @@ METHOD_START (outer)         call_id=0, parent_call_id=-1
 Where `I` = sid_len, `S` = sig_len, `T` = thread_len.
 
 The session ID is provided by the `SessionIdResolver` SPI (see
-[SESSION-RESOLVER-SPI.md](../../spi/session-resolver-api/SESSION-RESOLVER-SPI.md)).
+[session-resolver-spi.md](session-resolver-spi.md)).
 When no resolver is configured or the resolver returns `null`, `sid_len` is 0
 and no bytes are written for `session_id`.
 
@@ -157,7 +157,7 @@ Example: `com.example::Service.handle(java.lang::String, int) -> void [public]`
 
 The payload is the CBOR encoding (via `Codec.encode`) of the `Object[]`
 argument array. Each element is wrapped in a CBOR envelope (see
-[CODEC.md](../codec/CODEC.md) for envelope structure).
+[codec.md](codec.md) for envelope structure).
 
 ### RETURN (0x03)
 

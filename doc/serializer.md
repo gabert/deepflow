@@ -7,7 +7,7 @@ world (files, network, etc.).
 
 The module has no knowledge of bytecode instrumentation or the agent itself. It
 operates purely on `byte[]` records whose format is defined in the
-[record-format](../record-format/RECORD-FORMAT.md) module.
+[record-format](record-format.md) module.
 
 ## Data flow
 
@@ -71,7 +71,7 @@ construction time. This is used solely for naming the output directory
 
 This is _not_ the logical session ID — the logical session ID comes from the
 `SessionIdResolver` SPI and is embedded inside individual binary records.
-See [SESSION-RESOLVER-SPI.md](../../spi/session-resolver-api/SESSION-RESOLVER-SPI.md).
+See [session-resolver-spi.md](session-resolver-spi.md).
 
 ## Adding a new destination
 

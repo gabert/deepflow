@@ -6,7 +6,7 @@ selected classes at load time to capture method calls, arguments, return values,
 exceptions, and object identity.
 
 The agent itself produces no output files directly. It encodes captured data
-into binary records (see [RECORD-FORMAT.md](../record-format/RECORD-FORMAT.md))
+into binary records (see [record-format.md](record-format.md))
 and offers them to an in-memory buffer. A background drainer thread delivers
 records to a configured destination (see `serializer` module).
 
@@ -105,7 +105,7 @@ Used by `FileDestination` to name the output directory
 `METHOD_END` binary payload via the `SessionIdResolver` SPI. This is the
 logical session (HTTP session, request ID, debug run label, etc.). Configured
 by `session_resolver` + optionally `session_id`. See
-[SESSION-RESOLVER-SPI.md](../../spi/session-resolver-api/SESSION-RESOLVER-SPI.md).
+[session-resolver-spi.md](session-resolver-spi.md).
 
 ### Config resolution order
 

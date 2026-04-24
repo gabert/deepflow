@@ -101,7 +101,7 @@ During serialization, `EnvelopeSerializer` checks `Codec.getJpaProxyResolver()`
 **before** the default proxy detection. If a resolver is registered and returns
 a non-null unwrapped object, serialization continues with the real object. If it
 returns `null`, the default `isProxy()` check takes over and emits a `<proxy>`
-marker. See [JPA-PROXY-RESOLVER-SPI.md](../../spi/jpa-proxy-resolver-api/JPA-PROXY-RESOLVER-SPI.md).
+marker. See [jpa-proxy-resolver-spi.md](jpa-proxy-resolver-spi.md).
 
 ## Example: full encoded method arguments
 
