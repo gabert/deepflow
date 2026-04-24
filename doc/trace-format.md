@@ -31,7 +31,7 @@ A method call produces an **entry block** when the method is entered and an **ex
 | `TN` | Thread name | Name of the executing thread | `TN;http-handler-3` |
 | `CI` | Call ID | Unique ID for this method invocation (per thread) | `CI;7` |
 | `PI` | Parent call ID | Call ID of the caller (-1 for root calls) | `PI;3` |
-| `TS` | Timestamp (entry) | Epoch milliseconds at method entry | `TS;1777061479135` |
+| `TS` | Timestamp (entry) | Nanoseconds (from `System.nanoTime()`) at method entry | `TS;82741936205100` |
 | `CL` | Caller line | Source line number of the call site | `CL;42` |
 | `TI` | This instance | Object reference ID, or full serialized object if `expand_this=true` | `TI;3` |
 | `AR` | Arguments | Serialized method arguments as JSON | `AR;["hello", 42]` |
@@ -44,7 +44,7 @@ A method call produces an **entry block** when the method is entered and an **ex
 | `RE` | Return value | Serialized return value or exception as JSON | `RE;"result"` |
 | `AX` | Arguments at exit | Serialized arguments captured again at method exit (for mutation detection) | `AX;["modified", 42]` |
 | `TN` | Thread name | Repeated for the exit block | `TN;http-handler-3` |
-| `TE` | Timestamp (exit) | Epoch milliseconds at method return | `TE;1777061479200` |
+| `TE` | Timestamp (exit) | Nanoseconds (from `System.nanoTime()`) at method return | `TE;82741936270000` |
 
 ## Tag Configuration
 

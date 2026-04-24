@@ -76,7 +76,7 @@ public class DeepFlowAdvice {
         try {
             String signature = formatMethodSignature(method);
             String threadName = Thread.currentThread().getName();
-            long timestamp = System.currentTimeMillis();
+            long timestamp = System.nanoTime();
             int callerLine = STACK_WALKER
                     .walk(s -> s.skip(1).findFirst())
                     .map(StackWalker.StackFrame::getLineNumber)
@@ -117,7 +117,7 @@ public class DeepFlowAdvice {
         if (RECORD_BUFFER == null) return;
         try {
             String threadName = Thread.currentThread().getName();
-            long timestamp = System.currentTimeMillis();
+            long timestamp = System.nanoTime();
 
             String sessionId = getResolver().resolve();
             String sessionKey = sessionId != null ? sessionId : "";
