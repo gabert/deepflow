@@ -21,7 +21,7 @@ import java.util.function.Function;
 public final class RecordRenderer {
     private static final String DELIMITER = ";";
     private static final Set<String> ALL_TAGS = Set.of(
-            "VR", "MS", "SI", "TN", "CI", "TS", "CL", "TI", "AR", "AX", "RT", "RE", "TE");
+            "VR", "MS", "SI", "TN", "RI", "TS", "CL", "TI", "AR", "AX", "RT", "RE", "TE");
 
     private static final Map<Byte, Function<TraceRecord, List<TagEntry>>> HANDLERS = buildHandlers();
 
@@ -73,7 +73,7 @@ public final class RecordRenderer {
             if (m.sessionId != null) entries.add(tag("SI", m.sessionId));
             entries.add(tag("MS", m.signature));
             entries.add(tag("TN", m.threadName));
-            entries.add(tag("CI", String.valueOf(m.callId)));
+            entries.add(tag("RI", String.valueOf(m.requestId)));
             entries.add(tag("CL", String.valueOf(m.callerLine)));
             entries.add(threadName(m.threadName));
             return entries;

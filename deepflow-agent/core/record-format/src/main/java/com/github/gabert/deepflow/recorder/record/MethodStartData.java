@@ -6,16 +6,16 @@ public final class MethodStartData {
     public final String threadName;
     public final long timestamp;
     public final int callerLine;
-    public final long callId;
+    public final long requestId;
 
     public MethodStartData(String sessionId, String signature, String threadName,
                            long timestamp, int callerLine,
-                           long callId) {
+                           long requestId) {
         this.sessionId = sessionId;
         this.signature = signature;
         this.threadName = threadName;
         this.timestamp = timestamp;
         this.callerLine = callerLine;
-        this.callId = callId;
+        this.requestId = requestId;
     }
 }

@@ -236,8 +236,8 @@ class RecordWriterReaderTest {
         assertEquals("http-handler-1", inner.threadName);
 
         // Verify call IDs
-        assertEquals(0L, outer.callId);
-        assertEquals(1L, inner.callId);
+        assertEquals(0L, outer.requestId);
+        assertEquals(1L, inner.requestId);
 
         // Verify timestamps
         assertEquals(ts1, outer.timestamp);

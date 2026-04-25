@@ -6,7 +6,7 @@ import java.util.LinkedHashSet;
 
 
 public class AgentConfig {
-    private static final String DEFAULT_EMIT_TAGS = "SI,TN,CI,TS,CL,TI,AR,RT,RE,TE";
+    private static final String DEFAULT_EMIT_TAGS = "SI,TN,RI,TS,CL,TI,AR,RT,RE,TE";
 
     private final List<String> matchersInclude = new ArrayList<>();
     private final List<String> matchersExclude = new ArrayList<>();
@@ -16,6 +16,7 @@ public class AgentConfig {
     private final String jpaProxyResolver;
     private final boolean expandThis;
     private final boolean serializeValues;
+    private final boolean propagateRequestId;
     private final String destination;
     private final Set<String> emitTags;
     private final Map<String, String> configMap;
@@ -43,6 +44,7 @@ public class AgentConfig {
         this.jpaProxyResolver = configMap.getOrDefault("jpa_proxy_resolver", null);
         this.expandThis = Boolean.parseBoolean(configMap.getOrDefault("expand_this", "false"));
         this.serializeValues = Boolean.parseBoolean(configMap.getOrDefault("serialize_values", "true"));
+        this.propagateRequestId = Boolean.parseBoolean(configMap.getOrDefault("propagate_request_id", "true"));
         this.destination = configMap.getOrDefault("destination", "file");
 
         String tagsValue = configMap.getOrDefault("emit_tags", DEFAULT_EMIT_TAGS);
@@ -85,6 +87,10 @@ public class AgentConfig {
 
     public boolean isSerializeValues() {
         return serializeValues;
+    }
+
+    public boolean isPropagateRequestId() {
+        return propagateRequestId;
     }
 
     public String getDestination() {

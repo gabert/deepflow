@@ -8,9 +8,10 @@ import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.utility.JavaModule;
 
-import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ThreadPoolExecutor;
 
 public class DeepFlowAgent {
     private static final String AGENT_PACKAGE = "com.github.gabert.deepflow.agent";
@@ -76,5 +77,40 @@ public class DeepFlowAgent {
                 .disableClassFormatChanges() // Prevent class format changes for frameworks
                 .ignore(matcherAgentPackage)
                 .installOn(instrumentation);
+
+        if (agentConfig.isPropagateRequestId()) {
+            installExecutorInstrumentation(instrumentation);
+        }
+    }
+
+    private static void installExecutorInstrumentation(Instrumentation instrumentation) {
+        // ThreadPoolExecutor.execute(Runnable) — covers @Async, ExecutorService.submit(),
+        // ScheduledThreadPoolExecutor (extends ThreadPoolExecutor)
+        new AgentBuilder.Default()
+                .disableClassFormatChanges()
+                .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                .type(ElementMatchers.is(ThreadPoolExecutor.class))
+                .transform((builder, type, loader, module, pd) -> builder.visit(
+                        Advice.to(ExecutorAdvice.class)
+                                .on(ElementMatchers.named("execute")
+                                        .and(ElementMatchers.takesArgument(0, Runnable.class)))))
+                .installOn(instrumentation);
+
+        // ForkJoinPool.execute(Runnable) and submit(Runnable/Callable) — covers
+        // CompletableFuture.supplyAsync(), explicit ForkJoinPool usage
+        new AgentBuilder.Default()
+                .disableClassFormatChanges()
+                .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                .type(ElementMatchers.is(ForkJoinPool.class))
+                .transform((builder, type, loader, module, pd) -> builder.visit(
+                        Advice.to(ForkJoinAdvice.ExecuteRunnable.class)
+                                .on(ElementMatchers.named("execute")
+                                        .and(ElementMatchers.takesArgument(0, Runnable.class))))
+                        .visit(Advice.to(ForkJoinAdvice.SubmitCallable.class)
+                                .on(ElementMatchers.named("submit")
+                                        .and(ElementMatchers.takesArgument(0, java.util.concurrent.Callable.class)))))
+                .installOn(instrumentation);
+
+        System.out.println("[DeepFlow] Executor instrumentation installed (request ID propagation)");
     }
 }

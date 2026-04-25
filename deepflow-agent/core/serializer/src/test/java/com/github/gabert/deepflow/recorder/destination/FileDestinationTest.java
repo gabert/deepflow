@@ -90,7 +90,7 @@ class FileDestinationTest {
         byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0L, null, args);
         byte[] exit = RecordWriter.logExit(null, "main", 2000L, ret, false);
 
-        Set<String> defaultTags = Set.of("MS", "SI", "TN", "CI", "TS", "CL", "TI", "AR", "RT", "RE", "TE");
+        Set<String> defaultTags = Set.of("MS", "SI", "TN", "RI", "TS", "CL", "TI", "AR", "RT", "RE", "TE");
         RecordRenderer.Result entryRendered = RecordRenderer.render(entry, defaultTags);
         RecordRenderer.Result exitRendered = RecordRenderer.render(exit, defaultTags);
         List<String> expectedLines = new ArrayList<>();

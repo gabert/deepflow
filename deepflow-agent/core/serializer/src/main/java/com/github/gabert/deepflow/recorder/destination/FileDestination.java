@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class FileDestination implements Destination {
-    private static final String DEFAULT_EMIT_TAGS = "MS,SI,TN,CI,PI,TS,CL,TI,AR,RT,RE,TE";
+    private static final String DEFAULT_EMIT_TAGS = "MS,SI,TN,RI,TS,CL,TI,AR,RT,RE,TE";
 
     private final Path sessionDir;
     private final String runTimestamp;

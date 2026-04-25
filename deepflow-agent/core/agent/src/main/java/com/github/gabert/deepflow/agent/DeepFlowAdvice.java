@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -32,7 +33,9 @@ public class DeepFlowAdvice {
     private static volatile SessionIdResolver SESSION_ID_RESOLVER;
     private static volatile boolean JPA_PROXY_RESOLVER_INITIALIZED;
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
-    private static final ThreadLocal<Long> CALL_ID_COUNTER = ThreadLocal.withInitial(() -> 0L);
+    private static final AtomicLong REQUEST_COUNTER = new AtomicLong(0);
+    static final ThreadLocal<long[]> CURRENT_REQUEST_ID = ThreadLocal.withInitial(() -> new long[]{0L});
+    static final ThreadLocal<int[]> DEPTH = ThreadLocal.withInitial(() -> new int[]{0});
 
     public static void setup(AgentConfig config) {
         CONFIG = config;
@@ -79,18 +82,23 @@ public class DeepFlowAdvice {
 
             String sessionId = getResolver().resolve();
 
-            long callId = CALL_ID_COUNTER.get();
-            CALL_ID_COUNTER.set(callId + 1);
+            int[] depthHolder = DEPTH.get();
+            long[] requestIdHolder = CURRENT_REQUEST_ID.get();
+            if (depthHolder[0] == 0) {
+                requestIdHolder[0] = REQUEST_COUNTER.incrementAndGet();
+            }
+            depthHolder[0]++;
+            long requestId = requestIdHolder[0];
 
             byte[] record;
             if (SERIALIZE_VALUES) {
                 Object selfForCapture = EMIT_TI ? self : null;
                 Object[] argsForCapture = EMIT_AR ? allArguments : null;
                 record = buildSerializedEntry(sessionId, signature, threadName, timestamp, callerLine,
-                        callId, selfForCapture, argsForCapture);
+                        requestId, selfForCapture, argsForCapture);
             } else {
                 record = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine,
-                        callId);
+                        requestId);
             }
 
             RECORD_BUFFER.offer(record);
@@ -105,6 +113,10 @@ public class DeepFlowAdvice {
     public static void recordExit(Method method, Object returned, Throwable throwable,
                                    Object[] allArguments) {
         if (RECORD_BUFFER == null) return;
+        int[] depthHolder = DEPTH.get();
+        if (depthHolder[0] > 0) {
+            depthHolder[0]--;
+        }
         try {
             String threadName = Thread.currentThread().getName();
             long timestamp = System.nanoTime();
@@ -157,10 +169,10 @@ public class DeepFlowAdvice {
 
     private static byte[] buildSerializedEntry(String sessionId, String signature, String threadName,
                                                 long timestamp, int callerLine,
-                                                long callId,
+                                                long requestId,
                                                 Object self, Object[] allArguments) throws IOException {
         byte[] startRecord = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine,
-                callId);
+                requestId);
 
         byte[] thisRecord = null;
         if (self != null) {

@@ -32,7 +32,7 @@ class RecordRendererTest {
         assertEquals("SI;" + SESSION, lines.get(1));
         assertEquals("MS;" + SIGNATURE, lines.get(2));
         assertEquals("TN;main", lines.get(3));
-        assertEquals("CI;5", lines.get(4));
+        assertEquals("RI;5", lines.get(4));
         assertEquals("CL;99", lines.get(5));
         assertTrue(lines.get(6).startsWith("AR;"));
     }
@@ -116,12 +116,12 @@ class RecordRendererTest {
         assertEquals(THREAD, result.threadName());
         List<String> lines = result.lines();
 
-        // Entry: TS, SI, MS, TN, CI, CL, AR
+        // Entry: TS, SI, MS, TN, RI, CL, AR
         assertEquals("TS;1000", lines.get(0));
         assertEquals("SI;" + SESSION, lines.get(1));
         assertEquals("MS;" + SIGNATURE, lines.get(2));
         assertEquals("TN;main", lines.get(3));
-        assertEquals("CI;0", lines.get(4));
+        assertEquals("RI;0", lines.get(4));
         assertEquals("CL;10", lines.get(5));
         assertTrue(lines.get(6).startsWith("AR;"));
 

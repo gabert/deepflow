@@ -66,8 +66,8 @@ public final class RecordReader {
         pos += RecordType.TIMESTAMP_SIZE;
         int callerLine = getInt(payload, pos);
         pos += RecordType.CALLER_LINE_SIZE;
-        long callId = getLong(payload, pos);
-        return new MethodStartData(sessionId, signature, threadName, timestamp, callerLine, callId);
+        long requestId = getLong(payload, pos);
+        return new MethodStartData(sessionId, signature, threadName, timestamp, callerLine, requestId);
     }
 
     public static MethodEndData decodeMethodEnd(TraceRecord record) {
