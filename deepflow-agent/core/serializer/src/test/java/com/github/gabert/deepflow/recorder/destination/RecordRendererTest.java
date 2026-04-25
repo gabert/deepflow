@@ -56,14 +56,15 @@ class RecordRendererTest {
     void renderVoidReturn() {
         long ts = 2000L;
 
-        byte[] data = RecordWriter.logExit(null, THREAD, ts, null, true);
+        byte[] data = RecordWriter.logExit(null, THREAD, ts, 0L, null, true);
         RecordRenderer.Result result = RecordRenderer.render(data);
 
         List<String> lines = result.lines();
         assertEquals("TE;2000", lines.get(0));
         assertEquals("TN;main", lines.get(1));
-        assertEquals("RT;VOID", lines.get(2));
-        assertEquals(3, lines.size());
+        assertEquals("RI;0", lines.get(2));
+        assertEquals("RT;VOID", lines.get(3));
+        assertEquals(4, lines.size());
     }
 
     // --- Value return rendering ---
@@ -73,14 +74,15 @@ class RecordRendererTest {
         byte[] retCbor = Codec.encode("returned");
         long ts = 3000L;
 
-        byte[] data = RecordWriter.logExit(null, THREAD, ts, retCbor, false);
+        byte[] data = RecordWriter.logExit(null, THREAD, ts, 0L, retCbor, false);
         RecordRenderer.Result result = RecordRenderer.render(data);
 
         List<String> lines = result.lines();
         assertEquals("TE;3000", lines.get(0));
         assertEquals("TN;main", lines.get(1));
-        assertEquals("RT;VALUE", lines.get(2));
-        assertTrue(lines.get(3).startsWith("RE;"));
+        assertEquals("RI;0", lines.get(2));
+        assertEquals("RT;VALUE", lines.get(3));
+        assertTrue(lines.get(4).startsWith("RE;"));
     }
 
     // --- Exception rendering ---
@@ -90,14 +92,15 @@ class RecordRendererTest {
         byte[] excCbor = Codec.encode(Map.of("message", "NPE"));
         long ts = 4000L;
 
-        byte[] data = RecordWriter.logExitException(null, THREAD, ts, excCbor);
+        byte[] data = RecordWriter.logExitException(null, THREAD, ts, 0L, excCbor);
         RecordRenderer.Result result = RecordRenderer.render(data);
 
         List<String> lines = result.lines();
         assertEquals("TE;4000", lines.get(0));
         assertEquals("TN;main", lines.get(1));
-        assertEquals("RT;EXCEPTION", lines.get(2));
-        assertTrue(lines.get(3).startsWith("RE;"));
+        assertEquals("RI;0", lines.get(2));
+        assertEquals("RT;EXCEPTION", lines.get(3));
+        assertTrue(lines.get(4).startsWith("RE;"));
     }
 
     // --- Full method trace ---
@@ -108,7 +111,7 @@ class RecordRendererTest {
         byte[] ret = Codec.encode(42);
 
         byte[] entry = RecordWriter.logEntry(SESSION, SIGNATURE, THREAD, 1000L, 10, 0L, null, args);
-        byte[] exit = RecordWriter.logExit(SESSION, THREAD, 2000L, ret, false);
+        byte[] exit = RecordWriter.logExit(SESSION, THREAD, 2000L, 0L, ret, false);
         byte[] data = concat(entry, exit);
 
         RecordRenderer.Result result = RecordRenderer.render(data);
@@ -125,13 +128,14 @@ class RecordRendererTest {
         assertEquals("CL;10", lines.get(5));
         assertTrue(lines.get(6).startsWith("AR;"));
 
-        // Exit: TE, TN, RT, RE
+        // Exit: TE, TN, RI, RT, RE
         assertEquals("TE;2000", lines.get(7));
         assertEquals("TN;main", lines.get(8));
-        assertEquals("RT;VALUE", lines.get(9));
-        assertTrue(lines.get(10).startsWith("RE;"));
+        assertEquals("RI;0", lines.get(9));
+        assertEquals("RT;VALUE", lines.get(10));
+        assertTrue(lines.get(11).startsWith("RE;"));
 
-        assertEquals(11, lines.size());
+        assertEquals(12, lines.size());
     }
 
     // --- This instance rendering ---
@@ -176,7 +180,7 @@ class RecordRendererTest {
 
     @Test
     void threadNameFromExitRecord() {
-        byte[] data = RecordWriter.logExit(null, "http-handler-3", 5000L, null, true);
+        byte[] data = RecordWriter.logExit(null, "http-handler-3", 5000L, 0L, null, true);
 
         RecordRenderer.Result result = RecordRenderer.render(data);
         assertEquals("http-handler-3", result.threadName());

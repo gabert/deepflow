@@ -109,6 +109,7 @@ public final class RecordRenderer {
             return List.of(
                     tag("TE", String.valueOf(m.timestamp)),
                     tag("TN", m.threadName),
+                    tag("RI", String.valueOf(m.requestId)),
                     threadName(m.threadName));
         });
 

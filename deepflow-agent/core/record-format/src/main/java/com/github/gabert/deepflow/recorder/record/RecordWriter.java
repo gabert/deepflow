@@ -33,17 +33,18 @@ public final class RecordWriter {
     }
 
     public static byte[] logExit(String sessionId, String threadName, long timestamp,
-                                 byte[] returnCbor, boolean isVoid) {
+                                 long requestId, byte[] returnCbor, boolean isVoid) {
         byte[] sessionIdBytes = encodeSessionId(sessionId);
-        byte[] end = methodEnd(sessionIdBytes, threadName, timestamp);
+        byte[] end = methodEnd(sessionIdBytes, threadName, timestamp, requestId);
         byte[] ret = isVoid ? returnVoid() : returnValue(returnCbor);
         return concat(end, ret);
     }
 
     public static byte[] logExitException(String sessionId, String threadName,
-                                          long timestamp, byte[] exceptionCbor) {
+                                          long timestamp, long requestId,
+                                          byte[] exceptionCbor) {
         byte[] sessionIdBytes = encodeSessionId(sessionId);
-        byte[] end = methodEnd(sessionIdBytes, threadName, timestamp);
+        byte[] end = methodEnd(sessionIdBytes, threadName, timestamp, requestId);
         byte[] exc = exception(exceptionCbor);
         return concat(end, exc);
     }
@@ -56,23 +57,25 @@ public final class RecordWriter {
     }
 
     public static byte[] logExitWithArgs(String sessionId, String threadName, long timestamp,
-                                         byte[] returnCbor, boolean isVoid, byte[] argsCbor) {
-        byte[] base = logExit(sessionId, threadName, timestamp, returnCbor, isVoid);
+                                         long requestId, byte[] returnCbor, boolean isVoid,
+                                         byte[] argsCbor) {
+        byte[] base = logExit(sessionId, threadName, timestamp, requestId, returnCbor, isVoid);
         byte[] exitArgs = argumentsExit(argsCbor);
         return concat(base, exitArgs);
     }
 
     public static byte[] logExitExceptionWithArgs(String sessionId, String threadName,
-                                                   long timestamp, byte[] exceptionCbor,
-                                                   byte[] argsCbor) {
-        byte[] base = logExitException(sessionId, threadName, timestamp, exceptionCbor);
+                                                   long timestamp, long requestId,
+                                                   byte[] exceptionCbor, byte[] argsCbor) {
+        byte[] base = logExitException(sessionId, threadName, timestamp, requestId, exceptionCbor);
         byte[] exitArgs = argumentsExit(argsCbor);
         return concat(base, exitArgs);
     }
 
-    public static byte[] logExitSimple(String sessionId, String threadName, long timestamp) {
+    public static byte[] logExitSimple(String sessionId, String threadName, long timestamp,
+                                       long requestId) {
         byte[] sessionIdBytes = encodeSessionId(sessionId);
-        return methodEnd(sessionIdBytes, threadName, timestamp);
+        return methodEnd(sessionIdBytes, threadName, timestamp, requestId);
     }
 
     public static byte[] version(short major, short minor) {
@@ -147,15 +150,18 @@ public final class RecordWriter {
         return frame(RecordType.EXCEPTION, exceptionCbor);
     }
 
-    public static byte[] methodEnd(String sessionId, String threadName, long timestamp) {
-        return methodEnd(encodeSessionId(sessionId), threadName, timestamp);
+    public static byte[] methodEnd(String sessionId, String threadName, long timestamp,
+                                   long requestId) {
+        return methodEnd(encodeSessionId(sessionId), threadName, timestamp, requestId);
     }
 
-    private static byte[] methodEnd(byte[] sessionIdBytes, String threadName, long timestamp) {
+    private static byte[] methodEnd(byte[] sessionIdBytes, String threadName, long timestamp,
+                                    long requestId) {
         byte[] threadBytes = threadName.getBytes(StandardCharsets.UTF_8);
         byte[] payload = new byte[RecordType.SESSION_ID_LENGTH_SIZE + sessionIdBytes.length
                                 + RecordType.THREAD_NAME_LENGTH_SIZE + threadBytes.length
-                                + RecordType.TIMESTAMP_SIZE];
+                                + RecordType.TIMESTAMP_SIZE
+                                + RecordType.REQUEST_ID_SIZE];
         int pos = 0;
         pos = putShort(payload, pos, (short) sessionIdBytes.length);
         System.arraycopy(sessionIdBytes, 0, payload, pos, sessionIdBytes.length);
@@ -163,7 +169,8 @@ public final class RecordWriter {
         pos = putShort(payload, pos, (short) threadBytes.length);
         System.arraycopy(threadBytes, 0, payload, pos, threadBytes.length);
         pos += threadBytes.length;
-        putLong(payload, pos, timestamp);
+        pos = putLong(payload, pos, timestamp);
+        putLong(payload, pos, requestId);
         return frame(RecordType.METHOD_END, payload);
     }
 

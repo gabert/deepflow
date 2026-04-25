@@ -31,7 +31,7 @@ class FileDestinationTest {
         FileDestination dest = createDestination(tempDir);
 
         byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0L, null, Codec.encode(new Object[]{}));
-        byte[] exit = RecordWriter.logExit(null, "main", 2000L, null, true);
+        byte[] exit = RecordWriter.logExit(null, "main", 2000L, 0L, null, true);
 
         dest.accept(entry);
         dest.accept(exit);
@@ -56,10 +56,10 @@ class FileDestinationTest {
         FileDestination dest = createDestination(tempDir);
 
         byte[] mainEntry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0L, null, Codec.encode(new Object[]{}));
-        byte[] mainExit = RecordWriter.logExit(null, "main", 2000L, null, true);
+        byte[] mainExit = RecordWriter.logExit(null, "main", 2000L, 0L, null, true);
 
         byte[] workerEntry = RecordWriter.logEntry(null, SIGNATURE, "worker-1", 1500L, 20, 1L, null, Codec.encode(new Object[]{}));
-        byte[] workerExit = RecordWriter.logExit(null, "worker-1", 2500L, null, true);
+        byte[] workerExit = RecordWriter.logExit(null, "worker-1", 2500L, 1L, null, true);
 
         dest.accept(mainEntry);
         dest.accept(workerEntry);
@@ -88,7 +88,7 @@ class FileDestinationTest {
         byte[] args = Codec.encode(new Object[]{"hello"});
         byte[] ret = Codec.encode(42);
         byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0L, null, args);
-        byte[] exit = RecordWriter.logExit(null, "main", 2000L, ret, false);
+        byte[] exit = RecordWriter.logExit(null, "main", 2000L, 0L, ret, false);
 
         Set<String> defaultTags = Set.of("MS", "SI", "TN", "RI", "TS", "CL", "TI", "AR", "RT", "RE", "TE");
         RecordRenderer.Result entryRendered = RecordRenderer.render(entry, defaultTags);
@@ -119,7 +119,7 @@ class FileDestinationTest {
         byte[] args = Codec.encode(new Object[]{});
         byte[] exc = Codec.encode(Map.of("message", "NPE"));
         byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0L, null, args);
-        byte[] exit = RecordWriter.logExitException(null, "main", 2000L, exc);
+        byte[] exit = RecordWriter.logExitException(null, "main", 2000L, 0L, exc);
 
         dest.accept(entry);
         dest.accept(exit);

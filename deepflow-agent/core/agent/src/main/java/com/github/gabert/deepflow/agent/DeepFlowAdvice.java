@@ -114,6 +114,7 @@ public class DeepFlowAdvice {
                                    Object[] allArguments) {
         if (RECORD_BUFFER == null) return;
         int[] depthHolder = DEPTH.get();
+        long requestId = CURRENT_REQUEST_ID.get()[0];
         if (depthHolder[0] > 0) {
             depthHolder[0]--;
         }
@@ -139,14 +140,14 @@ public class DeepFlowAdvice {
                             : RecordWriter.returnValue(Codec.encode(returned));
                 }
 
-                byte[] endRecord = RecordWriter.methodEnd(sessionId, threadName, timestamp);
+                byte[] endRecord = RecordWriter.methodEnd(sessionId, threadName, timestamp, requestId);
                 byte[] exitArgsRecord = exitArgsCbor != null
                         ? RecordWriter.argumentsExit(exitArgsCbor)
                         : new byte[0];
 
                 record = concatOptional(endRecord, returnRecord, exitArgsRecord);
             } else {
-                record = RecordWriter.logExitSimple(sessionId, threadName, timestamp);
+                record = RecordWriter.logExitSimple(sessionId, threadName, timestamp, requestId);
             }
             RECORD_BUFFER.offer(record);
         } catch (Throwable t) {

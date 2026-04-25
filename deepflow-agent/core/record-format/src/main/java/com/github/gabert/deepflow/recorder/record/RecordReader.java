@@ -84,7 +84,9 @@ public final class RecordReader {
         String threadName = new String(payload, pos, threadLen, StandardCharsets.UTF_8);
         pos += threadLen;
         long timestamp = getLong(payload, pos);
-        return new MethodEndData(sessionId, timestamp, threadName);
+        pos += RecordType.TIMESTAMP_SIZE;
+        long requestId = getLong(payload, pos);
+        return new MethodEndData(sessionId, timestamp, threadName, requestId);
     }
 
     // --- Binary field readers ---
