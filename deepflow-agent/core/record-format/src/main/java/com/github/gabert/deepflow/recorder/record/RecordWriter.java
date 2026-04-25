@@ -11,22 +11,22 @@ public final class RecordWriter {
     // --- Public API ---
 
     public static byte[] logEntry(String sessionId, String signature, String threadName,
-                                  long timestamp, int callerLine, int depth,
-                                  long callId, long parentCallId,
+                                  long timestamp, int callerLine,
+                                  long callId,
                                   byte[] thisInstanceCbor, byte[] argsCbor) {
         byte[] sessionIdBytes = encodeSessionId(sessionId);
-        byte[] start = methodStart(sessionIdBytes, signature, threadName, timestamp, callerLine, depth, callId, parentCallId);
+        byte[] start = methodStart(sessionIdBytes, signature, threadName, timestamp, callerLine, callId);
         byte[] thisInst = thisInstanceCbor != null ? thisInstance(thisInstanceCbor) : EMPTY_PAYLOAD;
         byte[] args = arguments(argsCbor);
         return concat(start, concat(thisInst, args));
     }
 
     public static byte[] logEntryWithThisRef(String sessionId, String signature, String threadName,
-                                             long timestamp, int callerLine, int depth,
-                                             long callId, long parentCallId,
+                                             long timestamp, int callerLine,
+                                             long callId,
                                              long thisInstanceId, byte[] argsCbor) {
         byte[] sessionIdBytes = encodeSessionId(sessionId);
-        byte[] start = methodStart(sessionIdBytes, signature, threadName, timestamp, callerLine, depth, callId, parentCallId);
+        byte[] start = methodStart(sessionIdBytes, signature, threadName, timestamp, callerLine, callId);
         byte[] thisRef = thisInstanceRef(thisInstanceId);
         byte[] args = arguments(argsCbor);
         return concat(start, concat(thisRef, args));
@@ -35,24 +35,24 @@ public final class RecordWriter {
     public static byte[] logExit(String sessionId, String threadName, long timestamp,
                                  byte[] returnCbor, boolean isVoid) {
         byte[] sessionIdBytes = encodeSessionId(sessionId);
-        byte[] ret = isVoid ? returnVoid() : returnValue(returnCbor);
         byte[] end = methodEnd(sessionIdBytes, threadName, timestamp);
-        return concat(ret, end);
+        byte[] ret = isVoid ? returnVoid() : returnValue(returnCbor);
+        return concat(end, ret);
     }
 
     public static byte[] logExitException(String sessionId, String threadName,
                                           long timestamp, byte[] exceptionCbor) {
         byte[] sessionIdBytes = encodeSessionId(sessionId);
-        byte[] exc = exception(exceptionCbor);
         byte[] end = methodEnd(sessionIdBytes, threadName, timestamp);
-        return concat(exc, end);
+        byte[] exc = exception(exceptionCbor);
+        return concat(end, exc);
     }
 
     public static byte[] logEntrySimple(String sessionId, String signature, String threadName,
-                                        long timestamp, int callerLine, int depth,
-                                        long callId, long parentCallId) {
+                                        long timestamp, int callerLine,
+                                        long callId) {
         byte[] sessionIdBytes = encodeSessionId(sessionId);
-        return methodStart(sessionIdBytes, signature, threadName, timestamp, callerLine, depth, callId, parentCallId);
+        return methodStart(sessionIdBytes, signature, threadName, timestamp, callerLine, callId);
     }
 
     public static byte[] logExitWithArgs(String sessionId, String threadName, long timestamp,
@@ -90,16 +90,15 @@ public final class RecordWriter {
     // --- logEntry internals ---
 
     private static byte[] methodStart(byte[] sessionIdBytes, String signature, String threadName,
-                                       long timestamp, int callerLine, int depth,
-                                       long callId, long parentCallId) {
+                                       long timestamp, int callerLine,
+                                       long callId) {
         byte[] sigBytes = signature.getBytes(StandardCharsets.UTF_8);
         byte[] threadBytes = threadName.getBytes(StandardCharsets.UTF_8);
         byte[] payload = new byte[RecordType.SESSION_ID_LENGTH_SIZE + sessionIdBytes.length
                                 + RecordType.SIGNATURE_LENGTH_SIZE + sigBytes.length
                                 + RecordType.THREAD_NAME_LENGTH_SIZE + threadBytes.length
                                 + RecordType.TIMESTAMP_SIZE + RecordType.CALLER_LINE_SIZE
-                                + RecordType.CALL_DEPTH_SIZE
-                                + RecordType.CALL_ID_SIZE + RecordType.PARENT_CALL_ID_SIZE];
+                                + RecordType.CALL_ID_SIZE];
         int pos = 0;
         pos = putShort(payload, pos, (short) sessionIdBytes.length);
         System.arraycopy(sessionIdBytes, 0, payload, pos, sessionIdBytes.length);
@@ -112,9 +111,7 @@ public final class RecordWriter {
         pos += threadBytes.length;
         pos = putLong(payload, pos, timestamp);
         pos = putInt(payload, pos, callerLine);
-        pos = putInt(payload, pos, depth);
-        pos = putLong(payload, pos, callId);
-        putLong(payload, pos, parentCallId);
+        putLong(payload, pos, callId);
         return frame(RecordType.METHOD_START, payload);
     }
 

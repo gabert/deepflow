@@ -12,10 +12,7 @@ import net.bytebuddy.implementation.bytecode.assign.Assigner;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -36,8 +33,6 @@ public class DeepFlowAdvice {
     private static volatile boolean JPA_PROXY_RESOLVER_INITIALIZED;
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
     private static final ThreadLocal<Long> CALL_ID_COUNTER = ThreadLocal.withInitial(() -> 0L);
-    private static final ThreadLocal<Map<String, Deque<Long>>> CALL_STACKS =
-            ThreadLocal.withInitial(HashMap::new);
 
     public static void setup(AgentConfig config) {
         CONFIG = config;
@@ -83,24 +78,19 @@ public class DeepFlowAdvice {
                     .orElse(0);
 
             String sessionId = getResolver().resolve();
-            String sessionKey = sessionId != null ? sessionId : "";
-            Deque<Long> stack = CALL_STACKS.get().computeIfAbsent(sessionKey, k -> new ArrayDeque<>());
 
             long callId = CALL_ID_COUNTER.get();
             CALL_ID_COUNTER.set(callId + 1);
-            long parentCallId = stack.isEmpty() ? -1 : stack.peek();
-            int depth = stack.size();
-            stack.push(callId);
 
             byte[] record;
             if (SERIALIZE_VALUES) {
                 Object selfForCapture = EMIT_TI ? self : null;
                 Object[] argsForCapture = EMIT_AR ? allArguments : null;
-                record = buildSerializedEntry(sessionId, signature, threadName, timestamp, callerLine, depth,
-                        callId, parentCallId, selfForCapture, argsForCapture);
+                record = buildSerializedEntry(sessionId, signature, threadName, timestamp, callerLine,
+                        callId, selfForCapture, argsForCapture);
             } else {
-                record = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine, depth,
-                        callId, parentCallId);
+                record = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine,
+                        callId);
             }
 
             RECORD_BUFFER.offer(record);
@@ -120,11 +110,6 @@ public class DeepFlowAdvice {
             long timestamp = System.nanoTime();
 
             String sessionId = getResolver().resolve();
-            String sessionKey = sessionId != null ? sessionId : "";
-            Deque<Long> stack = CALL_STACKS.get().get(sessionKey);
-            if (stack != null && !stack.isEmpty()) {
-                stack.pop();
-            }
 
             byte[] record;
             if (SERIALIZE_VALUES) {
@@ -147,7 +132,7 @@ public class DeepFlowAdvice {
                         ? RecordWriter.argumentsExit(exitArgsCbor)
                         : new byte[0];
 
-                record = concatOptional(returnRecord, exitArgsRecord, endRecord);
+                record = concatOptional(endRecord, returnRecord, exitArgsRecord);
             } else {
                 record = RecordWriter.logExitSimple(sessionId, threadName, timestamp);
             }
@@ -171,11 +156,11 @@ public class DeepFlowAdvice {
     // --- Private: entry record building ---
 
     private static byte[] buildSerializedEntry(String sessionId, String signature, String threadName,
-                                                long timestamp, int callerLine, int depth,
-                                                long callId, long parentCallId,
+                                                long timestamp, int callerLine,
+                                                long callId,
                                                 Object self, Object[] allArguments) throws IOException {
-        byte[] startRecord = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine, depth,
-                callId, parentCallId);
+        byte[] startRecord = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine,
+                callId);
 
         byte[] thisRecord = null;
         if (self != null) {

@@ -21,7 +21,7 @@ import java.util.function.Function;
 public final class RecordRenderer {
     private static final String DELIMITER = ";";
     private static final Set<String> ALL_TAGS = Set.of(
-            "VR", "MS", "SI", "TN", "CI", "PI", "TS", "CL", "TI", "AR", "AX", "RT", "RE", "TE");
+            "VR", "MS", "SI", "TN", "CI", "TS", "CL", "TI", "AR", "AX", "RT", "RE", "TE");
 
     private static final Map<Byte, Function<TraceRecord, List<TagEntry>>> HANDLERS = buildHandlers();
 
@@ -69,12 +69,11 @@ public final class RecordRenderer {
         map.put(RecordType.METHOD_START, record -> {
             MethodStartData m = RecordReader.decodeMethodStart(record);
             List<TagEntry> entries = new ArrayList<>();
+            entries.add(tag("TS", String.valueOf(m.timestamp)));
             if (m.sessionId != null) entries.add(tag("SI", m.sessionId));
             entries.add(tag("MS", m.signature));
             entries.add(tag("TN", m.threadName));
             entries.add(tag("CI", String.valueOf(m.callId)));
-            entries.add(tag("PI", String.valueOf(m.parentCallId)));
-            entries.add(tag("TS", String.valueOf(m.timestamp)));
             entries.add(tag("CL", String.valueOf(m.callerLine)));
             entries.add(threadName(m.threadName));
             return entries;
@@ -108,8 +107,8 @@ public final class RecordRenderer {
         map.put(RecordType.METHOD_END, record -> {
             MethodEndData m = RecordReader.decodeMethodEnd(record);
             return List.of(
-                    tag("TN", m.threadName),
                     tag("TE", String.valueOf(m.timestamp)),
+                    tag("TN", m.threadName),
                     threadName(m.threadName));
         });
 

@@ -6,7 +6,7 @@ import java.util.LinkedHashSet;
 
 
 public class AgentConfig {
-    private static final String DEFAULT_EMIT_TAGS = "SI,TN,CI,PI,TS,CL,TI,AR,RT,RE,TE";
+    private static final String DEFAULT_EMIT_TAGS = "SI,TN,CI,TS,CL,TI,AR,RT,RE,TE";
 
     private final List<String> matchersInclude = new ArrayList<>();
     private final List<String> matchersExclude = new ArrayList<>();
