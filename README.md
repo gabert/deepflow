@@ -1,73 +1,50 @@
-# Deepflow
+# DeepFlow
 
-## Introduction
+A Java application tracing tool that captures the complete runtime data flow
+of your application -- method arguments, return values, exceptions, object
+identity, and object mutations -- without any code changes.
 
-**Deepflow** is a powerful Java tracing tool designed to help developers monitor and analyze the behavior of their applications in detail. Inspired by Btrace, Deepflow goes beyond simple function call recording by capturing argument values, object IDs, and detecting changes in argument values after function calls. This allows for in-depth tracing of instances, including tracking assignments of instances with the same or different content.
+Attach it via `-javaagent`, point it at your packages, reproduce the problem,
+and read the trace.
 
-Deepflow consists of two main components:
-1. **Java Agent**: Collects data during application execution.
-2. **Python Analysis Tool**: Processes and analyzes the collected data using advanced machine learning techniques.
+## Components
 
-## Features
+- **deepflow-agent/** -- Java agent for bytecode instrumentation and trace
+  capture. See [deepflow-agent/README.md](deepflow-agent/README.md) for
+  quick start.
+- **deepflow-formater/** -- Python post-processor for trace output (mutation
+  detection, formatting).
 
-- **Function Call Recording**: Tracks method entry and exit points, along with argument values and object IDs.
-- **Argument Change Detection**: Monitors changes in arguments after function calls.
-- **Instance Tracing**: Detects modifications and assignments of instances within the application.
-- **Flexible Output**: Outputs data to files, databases, or other specified destinations.
-- **Comprehensive Analysis**: Python-based tool for detailed analysis of collected data.
-- **Machine Learning Analysis**: Leverages machine learning algorithms to uncover patterns, detect anomalies, and provide predictive insights.
+## Documentation
 
-## Getting Started
+All documentation is in [doc/](doc/):
 
-### Prerequisites
+- [Overview](doc/overview.md) -- what DeepFlow is and how it's different
+- [Getting Started](doc/getting-started.md) -- build, attach, configure
+- [Configuration Reference](doc/configuration.md) -- all config options
+- [Trace Format](doc/trace-format.md) -- `.dft` file format specification
 
-- Java Development Kit (JDK) 17. Java 11 should work as well. Not tested
-- Python 3.6 or higher
+Features:
+- [Request ID](doc/features/request-id.md) -- request correlation and cross-thread propagation
+- [Truncation](doc/features/truncation.md) -- capping serialized value size
+- [Mutation Detection](doc/features/mutation-detection.md) -- detecting argument changes
+- [Serialization Modes](doc/features/serialize-modes.md) -- full vs structural-only
 
-### Project structure description
+Internals:
+- [Architecture](doc/architecture.md) -- data flow and module structure
+- [Agent](doc/internals/agent.md) -- bytecode instrumentation
+- [Binary Format](doc/internals/record-format.md) -- wire protocol
+- [CBOR Codec](doc/internals/codec.md) -- object serialization
+- [Serializer](doc/internals/serializer.md) -- recording pipeline
 
-The project is split into two parts:
+SPI:
+- [Session Resolver](doc/spi/session-resolver.md) -- session ID injection
+- [JPA Proxy Resolver](doc/spi/jpa-proxy-resolver.md) -- Hibernate proxy unwrapping
 
-- Java agent: Responsible for collecting the data from the running java application
-- Formatter: Responsible for formating the collected raw data to format suitablemfor further analysis
+## Quick start
 
-
-### Installation
-
-1. **Clone the Repository**
-   ```sh
-   git clone https://github.com/gabert/deepflow.git
-   cd deepflow
-   ```
-
-2. **Build the agent and demo**
-```sh
+```bash
 cd deepflow-agent
 mvn clean install
+java -javaagent:core/agent/target/deepflow-agent.jar="config=deepagent.cfg" -jar your-app.jar
 ```
-
-### Running the Demo
-
-The demo is a simple standalone Java application that creates and mutates a few objects. Run it with the agent attached:
-
-```sh
-java -javaagent:deepflow-agent/agent/target/deepflow-agent-jar-with-dependencies.jar=config=deepagent.cfg \
-     -jar deepflow-agent/demo/target/DeepFlowDemo-0.0.1-SNAPSHOT.jar
-```
-
-Trace files will be written to the location specified in `deepagent.cfg` (`session_dump_location`, default `D:\temp`).
-
-### Configuration (`deepagent.cfg`)
-
-Key properties:
-
-```properties
-session_dump_location=D:\temp          # Where trace files are written
-matchers_include=com\.github\..*       # Regex of classes to instrument
-destination=file                       # file | zip | kafka
-compress_file_output=false
-```
-
-# ToDo:
-- write tutorial
-- write argument checking at the end of the call.
