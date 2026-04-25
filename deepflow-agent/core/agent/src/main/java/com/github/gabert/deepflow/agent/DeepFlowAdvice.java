@@ -3,7 +3,6 @@ package com.github.gabert.deepflow.agent;
 import com.github.gabert.deepflow.agent.session.SessionIdResolver;
 import com.github.gabert.deepflow.codec.Codec;
 import com.github.gabert.deepflow.codec.envelope.ObjectIdRegistry;
-import com.github.gabert.deepflow.jpaproxy.JpaProxyResolver;
 import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
 import com.github.gabert.deepflow.recorder.record.RecordWriter;
 import net.bytebuddy.asm.Advice;
@@ -15,9 +14,7 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -30,6 +27,7 @@ public class DeepFlowAdvice {
     private static boolean EMIT_AR;
     private static boolean EMIT_RT;
     private static boolean EMIT_AX;
+    private static int MAX_VALUE_SIZE;
     private static volatile SessionIdResolver SESSION_ID_RESOLVER;
     private static volatile boolean JPA_PROXY_RESOLVER_INITIALIZED;
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
@@ -45,6 +43,7 @@ public class DeepFlowAdvice {
         EMIT_AR = config.shouldEmit("AR");
         EMIT_RT = config.shouldEmit("RT") || config.shouldEmit("RE");
         EMIT_AX = config.shouldEmit("AX");
+        MAX_VALUE_SIZE = config.getMaxValueSize();
         RecorderManager manager = RecorderManager.create(config);
         RECORD_BUFFER = manager != null ? manager.getBuffer() : null;
     }
@@ -126,18 +125,18 @@ public class DeepFlowAdvice {
 
             byte[] record;
             if (SERIALIZE_VALUES) {
-                byte[] exitArgsCbor = (EMIT_AX && EMIT_AR) ? Codec.encode(allArguments) : null;
+                byte[] exitArgsCbor = (EMIT_AX && EMIT_AR) ? encodeWithLimit(allArguments) : null;
 
                 byte[] returnRecord;
                 if (!EMIT_RT) {
                     returnRecord = RecordWriter.returnVoid();
                 } else if (throwable != null) {
-                    returnRecord = RecordWriter.exception(Codec.encode(buildExceptionData(throwable)));
+                    returnRecord = RecordWriter.exception(encodeWithLimit(buildExceptionData(throwable)));
                 } else {
                     boolean isVoid = Void.TYPE.equals(method.getGenericReturnType());
                     returnRecord = isVoid
                             ? RecordWriter.returnVoid()
-                            : RecordWriter.returnValue(Codec.encode(returned));
+                            : RecordWriter.returnValue(encodeWithLimit(returned));
                 }
 
                 byte[] endRecord = RecordWriter.methodEnd(sessionId, threadName, timestamp, requestId);
@@ -166,6 +165,16 @@ public class DeepFlowAdvice {
         );
     }
 
+    // --- Private: value encoding with truncation ---
+
+    private static byte[] encodeWithLimit(Object obj) throws IOException {
+        byte[] encoded = Codec.encode(obj);
+        if (MAX_VALUE_SIZE > 0 && encoded.length > MAX_VALUE_SIZE) {
+            return Codec.encode(Map.of("__truncated", true, "original_size", encoded.length));
+        }
+        return encoded;
+    }
+
     // --- Private: entry record building ---
 
     private static byte[] buildSerializedEntry(String sessionId, String signature, String threadName,
@@ -178,7 +187,7 @@ public class DeepFlowAdvice {
         byte[] thisRecord = null;
         if (self != null) {
             if (EXPAND_THIS) {
-                thisRecord = RecordWriter.thisInstance(Codec.encode(self));
+                thisRecord = RecordWriter.thisInstance(encodeWithLimit(self));
             } else {
                 thisRecord = RecordWriter.thisInstanceRef(ObjectIdRegistry.idOf(self));
             }
@@ -186,7 +195,7 @@ public class DeepFlowAdvice {
 
         byte[] argsRecord = null;
         if (allArguments != null) {
-            argsRecord = RecordWriter.arguments(Codec.encode(allArguments));
+            argsRecord = RecordWriter.arguments(encodeWithLimit(allArguments));
         }
 
         return concatOptional(startRecord, thisRecord, argsRecord);
@@ -216,79 +225,22 @@ public class DeepFlowAdvice {
         synchronized (DeepFlowAdvice.class) {
             r = SESSION_ID_RESOLVER;
             if (r != null) return r;
-            r = loadSessionIdResolver(CONFIG, resolveClassLoader());
+            r = SpiLoader.loadSessionIdResolver(CONFIG, SpiLoader.resolveClassLoader());
             SESSION_ID_RESOLVER = r;
             return r;
         }
     }
 
-    private static final SessionIdResolver NOOP_RESOLVER = new SessionIdResolver() {
-        @Override public String name() { return "noop"; }
-        @Override public String resolve() { return null; }
-    };
-
     private static void initJpaProxyResolver() {
         if (JPA_PROXY_RESOLVER_INITIALIZED) return;
         synchronized (DeepFlowAdvice.class) {
             if (JPA_PROXY_RESOLVER_INITIALIZED) return;
-            JpaProxyResolver resolver = loadJpaProxyResolver(CONFIG, resolveClassLoader());
+            var resolver = SpiLoader.loadJpaProxyResolver(CONFIG, SpiLoader.resolveClassLoader());
             if (resolver != null) {
                 Codec.setJpaProxyResolver(resolver);
             }
             JPA_PROXY_RESOLVER_INITIALIZED = true;
         }
-    }
-
-    static SessionIdResolver loadSessionIdResolver(AgentConfig config, ClassLoader classLoader) {
-        String name = config.getSessionResolver();
-        if (name == null) {
-            System.err.println("[DeepFlow] SessionIdResolver: no session_resolver configured, using built-in noop");
-            return NOOP_RESOLVER;
-        }
-        SessionIdResolver found = loadSpiByName(SessionIdResolver.class, SessionIdResolver::name,
-                name, "SessionIdResolver", classLoader);
-        if (found != null) return found;
-        System.err.println("[DeepFlow] WARNING: session_resolver='" + name
-                + "' not found on classpath, session tracking disabled");
-        return NOOP_RESOLVER;
-    }
-
-    static JpaProxyResolver loadJpaProxyResolver(AgentConfig config, ClassLoader classLoader) {
-        String name = config.getJpaProxyResolver();
-        if (name == null) {
-            System.err.println("[DeepFlow] JpaProxyResolver: no jpa_proxy_resolver configured, proxy unwrapping disabled");
-            return null;
-        }
-        JpaProxyResolver found = loadSpiByName(JpaProxyResolver.class, JpaProxyResolver::name,
-                name, "JpaProxyResolver", classLoader);
-        if (found != null) return found;
-        System.err.println("[DeepFlow] WARNING: jpa_proxy_resolver='" + name
-                + "' not found on classpath, JPA proxy resolution disabled");
-        return null;
-    }
-
-    private static <T> T loadSpiByName(Class<T> spiType, Function<T, String> nameGetter,
-                                        String name, String label, ClassLoader classLoader) {
-        ServiceLoader<T> loader = ServiceLoader.load(spiType, classLoader);
-        T selected = null;
-        System.err.println("[DeepFlow] " + label + ": looking for '" + name + "'");
-        for (T candidate : loader) {
-            String candidateName = nameGetter.apply(candidate);
-            System.err.println("[DeepFlow] " + label + ": found '" + candidateName
-                    + "' (" + candidate.getClass().getName() + ")");
-            if (name.equals(candidateName)) {
-                selected = candidate;
-            }
-        }
-        if (selected != null) {
-            System.err.println("[DeepFlow] " + label + ": activated '" + nameGetter.apply(selected) + "'");
-        }
-        return selected;
-    }
-
-    private static ClassLoader resolveClassLoader() {
-        ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        return cl != null ? cl : ClassLoader.getSystemClassLoader();
     }
 
     // --- Method signature formatting ---

@@ -17,6 +17,7 @@ public class AgentConfig {
     private final boolean expandThis;
     private final boolean serializeValues;
     private final boolean propagateRequestId;
+    private final int maxValueSize;
     private final String destination;
     private final Set<String> emitTags;
     private final Map<String, String> configMap;
@@ -45,6 +46,7 @@ public class AgentConfig {
         this.expandThis = Boolean.parseBoolean(configMap.getOrDefault("expand_this", "false"));
         this.serializeValues = Boolean.parseBoolean(configMap.getOrDefault("serialize_values", "true"));
         this.propagateRequestId = Boolean.parseBoolean(configMap.getOrDefault("propagate_request_id", "true"));
+        this.maxValueSize = Integer.parseInt(configMap.getOrDefault("max_value_size", "0"));
         this.destination = configMap.getOrDefault("destination", "file");
 
         String tagsValue = configMap.getOrDefault("emit_tags", DEFAULT_EMIT_TAGS);
@@ -91,6 +93,10 @@ public class AgentConfig {
 
     public boolean isPropagateRequestId() {
         return propagateRequestId;
+    }
+
+    public int getMaxValueSize() {
+        return maxValueSize;
     }
 
     public String getDestination() {

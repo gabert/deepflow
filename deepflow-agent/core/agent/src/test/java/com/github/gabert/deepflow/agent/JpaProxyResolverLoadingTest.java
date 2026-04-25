@@ -17,7 +17,7 @@ class JpaProxyResolverLoadingTest {
         AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=beta");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
-        JpaProxyResolver resolver = DeepFlowAdvice.loadJpaProxyResolver(config, testClassLoader);
+        JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, testClassLoader);
 
         assertNotNull(resolver);
         assertEquals("beta", resolver.name());
@@ -30,7 +30,7 @@ class JpaProxyResolverLoadingTest {
         AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=beta");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
-        JpaProxyResolver resolver = DeepFlowAdvice.loadJpaProxyResolver(config, testClassLoader);
+        JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, testClassLoader);
 
         assertNotNull(resolver);
         assertEquals("beta", resolver.name());
@@ -41,7 +41,7 @@ class JpaProxyResolverLoadingTest {
         AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=alpha");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
-        JpaProxyResolver resolver = DeepFlowAdvice.loadJpaProxyResolver(config, testClassLoader);
+        JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, testClassLoader);
 
         assertNotNull(resolver);
         assertEquals("alpha", resolver.name());
@@ -52,7 +52,7 @@ class JpaProxyResolverLoadingTest {
         AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=gamma");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
-        JpaProxyResolver resolver = DeepFlowAdvice.loadJpaProxyResolver(config, testClassLoader);
+        JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, testClassLoader);
 
         assertNotNull(resolver);
         assertEquals("gamma", resolver.name());
@@ -65,7 +65,7 @@ class JpaProxyResolverLoadingTest {
         AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=nonexistent");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
-        JpaProxyResolver resolver = DeepFlowAdvice.loadJpaProxyResolver(config, testClassLoader);
+        JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, testClassLoader);
 
         assertNull(resolver);
     }
@@ -76,7 +76,7 @@ class JpaProxyResolverLoadingTest {
     void noConfigReturnsNull() throws IOException {
         AgentConfig config = AgentConfig.getInstance("");
 
-        JpaProxyResolver resolver = DeepFlowAdvice.loadJpaProxyResolver(config,
+        JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config,
                 Thread.currentThread().getContextClassLoader());
 
         assertNull(resolver);
@@ -89,7 +89,7 @@ class JpaProxyResolverLoadingTest {
         AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=beta");
         ClassLoader emptyClassLoader = new URLClassLoader(new java.net.URL[0], null);
 
-        JpaProxyResolver resolver = DeepFlowAdvice.loadJpaProxyResolver(config, emptyClassLoader);
+        JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, emptyClassLoader);
 
         assertNull(resolver);
     }

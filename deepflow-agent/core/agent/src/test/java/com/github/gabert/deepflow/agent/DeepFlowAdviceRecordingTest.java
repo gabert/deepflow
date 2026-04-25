@@ -431,6 +431,68 @@ class DeepFlowAdviceRecordingTest {
         assertFalse(hasTag(renderNext(), "SI"), "No SI when resolver returns null");
     }
 
+    // ==================== TRUNCATION ====================
+
+    @Test
+    void largeReturnValueTruncated() throws Exception {
+        configureAdvice("serialize_values=true&expand_this=false&max_value_size=64");
+
+        DeepFlowAdvice.recordEntry(objectMethod, new HashMap<>(), new Object[]{"key"});
+        String bigValue = "x".repeat(500);
+        DeepFlowAdvice.recordExit(objectMethod, bigValue, null, new Object[]{"key"});
+
+        renderNext();
+        List<String> exit = renderNext();
+        assertEquals("VALUE", findTag(exit, "RT"));
+        String re = findTag(exit, "RE");
+        assertTrue(re.contains("__truncated"), "Oversized return should show __truncated marker");
+        assertTrue(re.contains("original_size"), "Truncation marker should include original_size");
+    }
+
+    @Test
+    void smallReturnValueNotTruncated() throws Exception {
+        configureAdvice("serialize_values=true&expand_this=false&max_value_size=64000");
+
+        DeepFlowAdvice.recordEntry(objectMethod, new HashMap<>(), new Object[]{"key"});
+        DeepFlowAdvice.recordExit(objectMethod, "short", null, new Object[]{"key"});
+
+        renderNext();
+        List<String> exit = renderNext();
+        String re = findTag(exit, "RE");
+        assertFalse(re.contains("__truncated"), "Small value should not be truncated");
+        assertTrue(re.contains("short"));
+    }
+
+    @Test
+    void largeArgumentsTruncated() throws Exception {
+        configureAdvice("serialize_values=true&expand_this=false&max_value_size=64");
+
+        String bigArg = "y".repeat(500);
+        DeepFlowAdvice.recordEntry(objectMethod, new HashMap<>(), new Object[]{bigArg});
+        DeepFlowAdvice.recordExit(objectMethod, null, null, new Object[]{bigArg});
+
+        List<String> entry = renderNext();
+        String ar = findTag(entry, "AR");
+        assertTrue(ar.contains("__truncated"), "Oversized arguments should show __truncated marker");
+    }
+
+    @Test
+    void noTruncationWhenDisabled() throws Exception {
+        configureAdvice("serialize_values=true&expand_this=false&max_value_size=0");
+
+        String bigValue = "z".repeat(500);
+        DeepFlowAdvice.recordEntry(objectMethod, new HashMap<>(), new Object[]{bigValue});
+        DeepFlowAdvice.recordExit(objectMethod, bigValue, null, new Object[]{bigValue});
+
+        List<String> entry = renderNext();
+        assertFalse(findTag(entry, "AR").contains("__truncated"),
+                "No truncation when max_value_size=0");
+
+        List<String> exit = renderNext();
+        assertFalse(findTag(exit, "RE").contains("__truncated"),
+                "No truncation when max_value_size=0");
+    }
+
     // ==================== HELPERS ====================
 
     private void configureAdvice(String agentArgs) throws Exception {
@@ -442,6 +504,7 @@ class DeepFlowAdviceRecordingTest {
         setField("EMIT_AR", config.shouldEmit("AR"));
         setField("EMIT_RT", config.shouldEmit("RT") || config.shouldEmit("RE"));
         setField("EMIT_AX", config.shouldEmit("AX"));
+        setField("MAX_VALUE_SIZE", config.getMaxValueSize());
     }
 
     private List<String> renderNext() {
