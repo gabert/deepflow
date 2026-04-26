@@ -60,6 +60,19 @@ production tracing, and team-wide analysis through a query interface.
 
 Both destinations capture the same data. The difference is where it lands.
 
+What gets recorded is fully configurable. The `emit_tags` setting controls
+which record tags are included in the output -- timestamps, arguments,
+return values, object identity, caller line numbers, and so on can each
+be turned on or off independently. Set `serialize_values=false` to skip
+object serialization entirely and record only structural data (which
+methods were called, in what order, by which thread). This is useful for
+dead code detection or when argument values are too large or sensitive to
+capture. Set `expand_this=false` to record only object identity references
+instead of full object state. Set `max_value_size` to cap serialized
+value size. The agent records exactly what you need -- nothing more.
+
+See [Configuration Reference](configuration.md) for all options.
+
 ## Two modes of use
 
 DeepFlow is designed to work in two modes. Both use the same agent and
