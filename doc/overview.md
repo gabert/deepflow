@@ -40,7 +40,39 @@ No code changes. No annotations. No SDK. Just attach and run.
 The output is structured text files (one per thread) that you can read
 directly, diff between runs, or feed into analysis tools.
 
-## Why this matters now
+## Two modes of use
+
+DeepFlow is designed to work in two modes. Both use the same agent and
+produce the same trace files -- the difference is who reads them.
+
+**Human mode.** A developer attaches the agent, reproduces the scenario,
+and reads the trace directly. The `.dft` files are structured text --
+method signatures, argument values, return values, timestamps -- readable
+in any editor. This is the primary mode. No AI, no external tools, no
+upload. You run the code, you read the trace, you find the bug. This
+mode is essential in environments where data sensitivity prohibits
+sending runtime values to any external system, including LLMs. Financial
+transactions, classified data, patient records, cryptographic material --
+when the trace contains data that must not leave the machine, only a
+verified human debugs locally.
+
+**AI-assisted mode.** The same trace files can be fed to an LLM for
+automated analysis. The Python formatter (`deepflow-formater`) can output
+traces in a compact semicolon-delimited format designed for token-efficient
+LLM consumption. This is useful for verifying AI-generated code (run the
+feature, feed the trace to a reviewer) or for large traces where manual
+reading is impractical.
+
+Both modes work offline. The trace is a local file. Nothing is sent
+anywhere unless you choose to.
+
+## Why this matters
+
+**Data bugs are expensive.** A null pointer is found in minutes. A wrong
+calculation that produces plausible results can go undetected for months.
+When it's finally discovered, nobody knows what the data looked like when
+it flowed through the system. With DeepFlow attached, the answer is in the
+trace file.
 
 **AI agents write a lot of code.** Tools like Claude Code, Cursor, and
 Copilot are generating significant portions of application code. It
@@ -48,8 +80,7 @@ compiles, tests pass, CI is green. But does the data actually flow
 correctly? Unit tests verify the cases someone anticipated. They can't
 cover every path through a complex system. DeepFlow lets you run the
 scenario and see exactly what happened -- what values arrived at each
-method, what transformations occurred, what came back. You can verify
-AI-generated code by reading the trace instead of guessing from the source.
+method, what transformations occurred, what came back.
 
 **Regulated industries can't just trust the tests.** In financial services,
 defence, and healthcare, "it passes the tests" isn't enough. Auditors and
@@ -59,12 +90,6 @@ right code path, that patient records were accessed only by authorized
 services. DeepFlow captures every method call with its actual data. It's
 not sampling, not probabilistic -- it's a complete record that can serve
 as evidence.
-
-**Data bugs are expensive.** A null pointer is found in minutes. A wrong
-calculation that produces plausible results can go undetected for months.
-When it's finally discovered, nobody knows what the data looked like when
-it flowed through the system. With DeepFlow attached, the answer is in the
-trace file.
 
 ## How it compares
 
@@ -90,12 +115,6 @@ object identity tracking with zero code changes.
 **Debugging data errors.** Reproduce the scenario, read the trace. See
 where the correct value goes in and the wrong one comes out.
 
-**Verifying AI-generated code.** Run the feature, read the trace, confirm
-the data flows correctly. Optionally feed the trace to an AI reviewer.
-
-**Auditing data flows.** Capture traces during test runs. Hand them to
-compliance or security reviewers as evidence.
-
 **Understanding unfamiliar code.** Instrument the packages, trigger a user
 flow, read the trace. Real execution with real data.
 
@@ -104,6 +123,13 @@ arguments. Find which method changed the list, the map, the entity.
 
 **Finding dead code.** Set `serialize_values=false`, run the test suite.
 Methods not in the trace were never called.
+
+**Verifying AI-generated code.** Run the feature, read the trace yourself
+or feed it to an AI reviewer. Confirm the data flows correctly without
+relying solely on tests.
+
+**Auditing data flows.** Capture traces during test runs. Hand them to
+compliance or security reviewers as evidence.
 
 ## Components
 
