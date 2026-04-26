@@ -81,8 +81,8 @@ public final class RecordWriter {
     public static byte[] version(short major, short minor) {
         byte[] payload = new byte[Short.BYTES + Short.BYTES];
         int pos = 0;
-        pos = putShort(payload, pos, major);
-        putShort(payload, pos, minor);
+        pos = BinaryUtil.putShort(payload, pos, major);
+        BinaryUtil.putShort(payload, pos, minor);
         return frame(RecordType.VERSION, payload);
     }
 
@@ -103,18 +103,18 @@ public final class RecordWriter {
                                 + RecordType.TIMESTAMP_SIZE + RecordType.CALLER_LINE_SIZE
                                 + RecordType.REQUEST_ID_SIZE];
         int pos = 0;
-        pos = putShort(payload, pos, (short) sessionIdBytes.length);
+        pos = BinaryUtil.putShort(payload, pos, (short) sessionIdBytes.length);
         System.arraycopy(sessionIdBytes, 0, payload, pos, sessionIdBytes.length);
         pos += sessionIdBytes.length;
-        pos = putShort(payload, pos, (short) sigBytes.length);
+        pos = BinaryUtil.putShort(payload, pos, (short) sigBytes.length);
         System.arraycopy(sigBytes, 0, payload, pos, sigBytes.length);
         pos += sigBytes.length;
-        pos = putShort(payload, pos, (short) threadBytes.length);
+        pos = BinaryUtil.putShort(payload, pos, (short) threadBytes.length);
         System.arraycopy(threadBytes, 0, payload, pos, threadBytes.length);
         pos += threadBytes.length;
-        pos = putLong(payload, pos, timestamp);
-        pos = putInt(payload, pos, callerLine);
-        putLong(payload, pos, requestId);
+        pos = BinaryUtil.putLong(payload, pos, timestamp);
+        pos = BinaryUtil.putInt(payload, pos, callerLine);
+        BinaryUtil.putLong(payload, pos, requestId);
         return frame(RecordType.METHOD_START, payload);
     }
 
@@ -124,7 +124,7 @@ public final class RecordWriter {
 
     public static byte[] thisInstanceRef(long objectId) {
         byte[] payload = new byte[Long.BYTES];
-        putLong(payload, 0, objectId);
+        BinaryUtil.putLong(payload, 0, objectId);
         return frame(RecordType.THIS_INSTANCE_REF, payload);
     }
 
@@ -163,14 +163,14 @@ public final class RecordWriter {
                                 + RecordType.TIMESTAMP_SIZE
                                 + RecordType.REQUEST_ID_SIZE];
         int pos = 0;
-        pos = putShort(payload, pos, (short) sessionIdBytes.length);
+        pos = BinaryUtil.putShort(payload, pos, (short) sessionIdBytes.length);
         System.arraycopy(sessionIdBytes, 0, payload, pos, sessionIdBytes.length);
         pos += sessionIdBytes.length;
-        pos = putShort(payload, pos, (short) threadBytes.length);
+        pos = BinaryUtil.putShort(payload, pos, (short) threadBytes.length);
         System.arraycopy(threadBytes, 0, payload, pos, threadBytes.length);
         pos += threadBytes.length;
-        pos = putLong(payload, pos, timestamp);
-        putLong(payload, pos, requestId);
+        pos = BinaryUtil.putLong(payload, pos, timestamp);
+        BinaryUtil.putLong(payload, pos, requestId);
         return frame(RecordType.METHOD_END, payload);
     }
 
@@ -183,7 +183,7 @@ public final class RecordWriter {
     private static byte[] frame(byte type, byte[] payload) {
         byte[] frame = new byte[RecordType.HEADER_SIZE + payload.length];
         frame[0] = type;
-        putInt(frame, 1, payload.length);
+        BinaryUtil.putInt(frame, 1, payload.length);
         System.arraycopy(payload, 0, frame, RecordType.HEADER_SIZE, payload.length);
         return frame;
     }
@@ -193,31 +193,5 @@ public final class RecordWriter {
         System.arraycopy(a, 0, result, 0, a.length);
         System.arraycopy(b, 0, result, a.length, b.length);
         return result;
-    }
-
-    private static int putShort(byte[] buf, int pos, short value) {
-        buf[pos]     = (byte) (value >>> 8);
-        buf[pos + 1] = (byte) value;
-        return pos + 2;
-    }
-
-    private static int putInt(byte[] buf, int pos, int value) {
-        buf[pos]     = (byte) (value >>> 24);
-        buf[pos + 1] = (byte) (value >>> 16);
-        buf[pos + 2] = (byte) (value >>> 8);
-        buf[pos + 3] = (byte) value;
-        return pos + 4;
-    }
-
-    private static int putLong(byte[] buf, int pos, long value) {
-        buf[pos]     = (byte) (value >>> 56);
-        buf[pos + 1] = (byte) (value >>> 48);
-        buf[pos + 2] = (byte) (value >>> 40);
-        buf[pos + 3] = (byte) (value >>> 32);
-        buf[pos + 4] = (byte) (value >>> 24);
-        buf[pos + 5] = (byte) (value >>> 16);
-        buf[pos + 6] = (byte) (value >>> 8);
-        buf[pos + 7] = (byte) value;
-        return pos + 8;
     }
 }

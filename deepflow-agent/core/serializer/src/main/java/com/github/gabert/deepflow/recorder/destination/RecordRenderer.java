@@ -5,12 +5,13 @@ import com.github.gabert.deepflow.codec.Codec;
 import com.github.gabert.deepflow.codec.envelope.FieldIds;
 import com.github.gabert.deepflow.recorder.record.MethodEndData;
 import com.github.gabert.deepflow.recorder.record.MethodStartData;
+import com.github.gabert.deepflow.recorder.record.BinaryUtil;
 import com.github.gabert.deepflow.recorder.record.RecordReader;
 import com.github.gabert.deepflow.recorder.record.RecordType;
 
 import java.io.IOException;
 
-import com.github.gabert.deepflow.recorder.record.TraceRecord;
+import com.github.gabert.deepflow.recorder.record.RawFrame;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -23,7 +24,7 @@ public final class RecordRenderer {
     private static final Set<String> ALL_TAGS = Set.of(
             "VR", "MS", "SI", "TN", "RI", "TS", "CL", "TI", "AR", "AX", "RT", "RE", "TE");
 
-    private static final Map<Byte, Function<TraceRecord, List<TagEntry>>> HANDLERS = buildHandlers();
+    private static final Map<Byte, Function<RawFrame, List<TagEntry>>> HANDLERS = buildHandlers();
 
     private RecordRenderer() {}
 
@@ -34,12 +35,12 @@ public final class RecordRenderer {
     }
 
     public static Result render(byte[] data, Set<String> emitTags) {
-        List<TraceRecord> records = RecordReader.readAll(data);
+        List<RawFrame> records = RecordReader.readAll(data);
         List<String> lines = new ArrayList<>();
         String threadName = null;
 
-        for (TraceRecord record : records) {
-            Function<TraceRecord, List<TagEntry>> handler = HANDLERS.get(record.type());
+        for (RawFrame record : records) {
+            Function<RawFrame, List<TagEntry>> handler = HANDLERS.get(record.type());
             if (handler == null) continue;
 
             for (TagEntry entry : handler.apply(record)) {
@@ -57,8 +58,8 @@ public final class RecordRenderer {
 
     // --- Handler registry ---
 
-    private static Map<Byte, Function<TraceRecord, List<TagEntry>>> buildHandlers() {
-        Map<Byte, Function<TraceRecord, List<TagEntry>>> map = new HashMap<>();
+    private static Map<Byte, Function<RawFrame, List<TagEntry>>> buildHandlers() {
+        Map<Byte, Function<RawFrame, List<TagEntry>>> map = new HashMap<>();
 
         map.put(RecordType.VERSION, record -> {
             short major = (short) ((record.payload()[0] << 8) | (record.payload()[1] & 0xFF));
@@ -83,7 +84,7 @@ public final class RecordRenderer {
                 List.of(tag("TI", decodeCborPayload(record.payload()))));
 
         map.put(RecordType.THIS_INSTANCE_REF, record ->
-                List.of(tag("TI", String.valueOf(RecordReader.getLong(record.payload(), 0)))));
+                List.of(tag("TI", String.valueOf(BinaryUtil.getLong(record.payload(), 0)))));
 
         map.put(RecordType.ARGUMENTS, record ->
                 List.of(tag("AR", decodeArgumentsPayload(record.payload()))));

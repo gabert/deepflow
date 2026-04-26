@@ -2,10 +2,11 @@ package com.github.gabert.deepflow.recorder;
 
 import com.github.gabert.deepflow.recorder.record.MethodEndData;
 import com.github.gabert.deepflow.recorder.record.MethodStartData;
+import com.github.gabert.deepflow.recorder.record.BinaryUtil;
+import com.github.gabert.deepflow.recorder.record.RawFrame;
 import com.github.gabert.deepflow.recorder.record.RecordReader;
 import com.github.gabert.deepflow.recorder.record.RecordType;
 import com.github.gabert.deepflow.recorder.record.RecordWriter;
-import com.github.gabert.deepflow.recorder.record.TraceRecord;
 import org.junit.jupiter.api.Test;
 
 import java.util.HexFormat;
@@ -261,7 +262,7 @@ class WireFormatGoldenTest {
                 "session", "sig", "thread",
                 0x1122334455667788L, 42, 0x99AABBCCDDEEFF00L);
 
-        List<TraceRecord> records = RecordReader.readAll(bytes);
+        List<RawFrame> records = RecordReader.readAll(bytes);
         assertEquals(1, records.size());
         assertEquals(RecordType.METHOD_START, records.get(0).type());
 
@@ -279,7 +280,7 @@ class WireFormatGoldenTest {
         byte[] bytes = RecordWriter.methodEnd(
                 "session", "thread", 0x1122334455667788L, 0x99AABBCCDDEEFF00L);
 
-        List<TraceRecord> records = RecordReader.readAll(bytes);
+        List<RawFrame> records = RecordReader.readAll(bytes);
         assertEquals(1, records.size());
         assertEquals(RecordType.METHOD_END, records.get(0).type());
 
@@ -304,9 +305,9 @@ class WireFormatGoldenTest {
     void thisInstanceRef_parsesBackToSameId() {
         byte[] bytes = RecordWriter.thisInstanceRef(0x123456789ABCDEF0L);
 
-        List<TraceRecord> records = RecordReader.readAll(bytes);
+        List<RawFrame> records = RecordReader.readAll(bytes);
         assertEquals(1, records.size());
         assertEquals(RecordType.THIS_INSTANCE_REF, records.get(0).type());
-        assertEquals(0x123456789ABCDEF0L, RecordReader.getLong(records.get(0).payload(), 0));
+        assertEquals(0x123456789ABCDEF0L, BinaryUtil.getLong(records.get(0).payload(), 0));
     }
 }
