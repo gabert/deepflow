@@ -1,5 +1,9 @@
 package com.github.gabert.deepflow.agent;
 
+import com.github.gabert.deepflow.agent.advice.DeepFlowAdvice;
+import com.github.gabert.deepflow.agent.advice.ExecutorAdvice;
+import com.github.gabert.deepflow.agent.advice.ForkJoinAdvice;
+import com.github.gabert.deepflow.agent.recording.RequestRecorder;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.type.TypeDescription;
@@ -51,7 +55,10 @@ public class DeepFlowAgent {
                 + ", matchers=" + agentConfig.getMatchersInclude().size() + " include / "
                 + agentConfig.getMatchersExclude().size() + " exclude");
 
-        DeepFlowAdvice.setup(agentConfig);
+        RecorderManager manager = RecorderManager.create(agentConfig);
+        if (manager != null) {
+            DeepFlowAdvice.setup(new RequestRecorder(manager.getBuffer(), agentConfig));
+        }
 
         Advice advice = Advice.to(DeepFlowAdvice.class);
 
@@ -105,9 +112,9 @@ public class DeepFlowAgent {
         // if the system CL loaded them first, we'd get two copies and the
         // ThreadLocals would be different.
         String[] classResources = {
-                "com/github/gabert/deepflow/agent/RequestContext.class",
-                "com/github/gabert/deepflow/agent/PropagatingRunnable.class",
-                "com/github/gabert/deepflow/agent/PropagatingCallable.class"
+                "com/github/gabert/deepflow/agent/bootstrap/RequestContext.class",
+                "com/github/gabert/deepflow/agent/bootstrap/PropagatingRunnable.class",
+                "com/github/gabert/deepflow/agent/bootstrap/PropagatingCallable.class"
         };
 
         try {
@@ -133,7 +140,7 @@ public class DeepFlowAgent {
             // After injection, add a module reads edge so java.base can access
             // our bootstrap-injected classes (which land in the unnamed module).
             Class<?> injectedClass = Class.forName(
-                    "com.github.gabert.deepflow.agent.RequestContext", true, null);
+                    "com.github.gabert.deepflow.agent.bootstrap.RequestContext", true, null);
             Module javaBase = Object.class.getModule();
             Module unnamedBootstrap = injectedClass.getModule();
             instrumentation.redefineModule(

@@ -1,5 +1,7 @@
 package com.github.gabert.deepflow.agent;
 
+import com.github.gabert.deepflow.agent.bootstrap.PropagatingRunnable;
+import com.github.gabert.deepflow.agent.bootstrap.RequestContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

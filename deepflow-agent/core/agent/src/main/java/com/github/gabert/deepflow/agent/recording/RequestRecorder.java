@@ -1,12 +1,13 @@
-package com.github.gabert.deepflow.agent;
+package com.github.gabert.deepflow.agent.recording;
 
+import com.github.gabert.deepflow.agent.AgentConfig;
+import com.github.gabert.deepflow.agent.bootstrap.RequestContext;
 import com.github.gabert.deepflow.agent.session.SessionIdResolver;
+import com.github.gabert.deepflow.agent.spi.SpiLoader;
 import com.github.gabert.deepflow.codec.Codec;
 import com.github.gabert.deepflow.codec.envelope.ObjectIdRegistry;
 import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
 import com.github.gabert.deepflow.recorder.record.RecordWriter;
-import net.bytebuddy.asm.Advice;
-import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -17,55 +18,53 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class DeepFlowAdvice {
-    public static AgentConfig CONFIG;
-    public static RecordBuffer RECORD_BUFFER;
-    private static boolean EXPAND_THIS;
-    private static boolean SERIALIZE_VALUES;
-    private static boolean EMIT_TI;
-    private static boolean EMIT_AR;
-    private static boolean EMIT_RT;
-    private static boolean EMIT_AX;
-    private static int MAX_VALUE_SIZE;
-    private static volatile SessionIdResolver SESSION_ID_RESOLVER;
-    private static volatile boolean JPA_PROXY_RESOLVER_INITIALIZED;
+/**
+ * Owns the per-call recording logic: builds entry/exit byte records and
+ * pushes them to the buffer. Constructed once at agent startup; the active
+ * instance is held by {@code DeepFlowAdvice.RECORDER} and read by inlined
+ * advice on every traced method invocation.
+ *
+ * <p>Flag fields (expandThis, serializeValues, emit*) are snapshotted from
+ * the config in the constructor so the hot path does not pay a HashMap
+ * lookup per call.</p>
+ */
+public class RequestRecorder {
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
-    // Thread-local state lives in RequestContext (injected into bootstrap classloader)
+    private static final String METHOD_FORMAT = "%s.%s(%s) -> %s [%s]";
 
-    public static void setup(AgentConfig config) {
-        CONFIG = config;
-        EXPAND_THIS = config.isExpandThis();
-        SERIALIZE_VALUES = config.isSerializeValues();
-        EMIT_TI = config.shouldEmit("TI");
-        EMIT_AR = config.shouldEmit("AR");
-        EMIT_RT = config.shouldEmit("RT") || config.shouldEmit("RE");
-        EMIT_AX = config.shouldEmit("AX");
-        MAX_VALUE_SIZE = config.getMaxValueSize();
-        RecorderManager manager = RecorderManager.create(config);
-        RECORD_BUFFER = manager != null ? manager.getBuffer() : null;
+    private final AgentConfig config;
+    private final RecordBuffer recordBuffer;
+    private final boolean expandThis;
+    private final boolean serializeValues;
+    private final boolean emitTi;
+    private final boolean emitAr;
+    private final boolean emitRt;
+    private final boolean emitAx;
+    private final int maxValueSize;
+
+    private volatile SessionIdResolver sessionIdResolver;
+    private volatile boolean jpaProxyResolverInitialized;
+
+    public RequestRecorder(RecordBuffer recordBuffer, AgentConfig config) {
+        this.recordBuffer = recordBuffer;
+        this.config = config;
+        this.expandThis = config.isExpandThis();
+        this.serializeValues = config.isSerializeValues();
+        this.emitTi = config.shouldEmit("TI");
+        this.emitAr = config.shouldEmit("AR");
+        this.emitRt = config.shouldEmit("RT") || config.shouldEmit("RE");
+        this.emitAx = config.shouldEmit("AX");
+        this.maxValueSize = config.getMaxValueSize();
     }
 
-    @Advice.OnMethodEnter
-    public static void onEnter(@Advice.Origin Method method,
-                               @Advice.This(optional = true) Object self,
-                               @Advice.AllArguments Object[] allArguments) {
-
-        recordEntry(method, self, allArguments);
-    }
-
-    @Advice.OnMethodExit(onThrowable = Throwable.class)
-    public static void onExit(@Advice.Origin Method method,
-                              @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returned,
-                              @Advice.Thrown Throwable throwable,
-                              @Advice.AllArguments Object[] allArguments) {
-
-        recordExit(method, returned, throwable, allArguments);
+    public RecordBuffer getRecordBuffer() {
+        return recordBuffer;
     }
 
     // --- Record entry ---
 
-    public static void recordEntry(Method method, Object self, Object[] allArguments) {
-        if (RECORD_BUFFER == null) return;
+    public void recordEntry(Method method, Object self, Object[] allArguments) {
+        if (recordBuffer == null) return;
         initJpaProxyResolver();
         try {
             String signature = formatMethodSignature(method);
@@ -78,18 +77,12 @@ public class DeepFlowAdvice {
 
             String sessionId = getResolver().resolve();
 
-            int[] depthHolder = RequestContext.DEPTH.get();
-            long[] requestIdHolder = RequestContext.CURRENT_REQUEST_ID.get();
-            if (depthHolder[0] == 0) {
-                requestIdHolder[0] = RequestContext.REQUEST_COUNTER.incrementAndGet();
-            }
-            depthHolder[0]++;
-            long requestId = requestIdHolder[0];
+            long requestId = RequestContext.beginRequest();
 
             byte[] record;
-            if (SERIALIZE_VALUES) {
-                Object selfForCapture = EMIT_TI ? self : null;
-                Object[] argsForCapture = EMIT_AR ? allArguments : null;
+            if (serializeValues) {
+                Object selfForCapture = emitTi ? self : null;
+                Object[] argsForCapture = emitAr ? allArguments : null;
                 record = buildSerializedEntry(sessionId, signature, threadName, timestamp, callerLine,
                         requestId, selfForCapture, argsForCapture);
             } else {
@@ -97,7 +90,7 @@ public class DeepFlowAdvice {
                         requestId);
             }
 
-            RECORD_BUFFER.offer(record);
+            recordBuffer.offer(record);
         } catch (Throwable t) {
             System.err.println("Error recording entry.");
             t.printStackTrace();
@@ -106,14 +99,10 @@ public class DeepFlowAdvice {
 
     // --- Record exit ---
 
-    public static void recordExit(Method method, Object returned, Throwable throwable,
-                                   Object[] allArguments) {
-        if (RECORD_BUFFER == null) return;
-        int[] depthHolder = RequestContext.DEPTH.get();
-        long requestId = RequestContext.CURRENT_REQUEST_ID.get()[0];
-        if (depthHolder[0] > 0) {
-            depthHolder[0]--;
-        }
+    public void recordExit(Method method, Object returned, Throwable throwable,
+                           Object[] allArguments) {
+        if (recordBuffer == null) return;
+        long requestId = RequestContext.endRequest();
         try {
             String threadName = Thread.currentThread().getName();
             long timestamp = System.nanoTime();
@@ -121,11 +110,11 @@ public class DeepFlowAdvice {
             String sessionId = getResolver().resolve();
 
             byte[] record;
-            if (SERIALIZE_VALUES) {
-                byte[] exitArgsCbor = (EMIT_AX && EMIT_AR) ? encodeWithLimit(allArguments) : null;
+            if (serializeValues) {
+                byte[] exitArgsCbor = (emitAx && emitAr) ? encodeWithLimit(allArguments) : null;
 
                 byte[] returnRecord;
-                if (!EMIT_RT) {
+                if (!emitRt) {
                     returnRecord = RecordWriter.returnVoid();
                 } else if (throwable != null) {
                     returnRecord = RecordWriter.exception(encodeWithLimit(buildExceptionData(throwable)));
@@ -145,45 +134,25 @@ public class DeepFlowAdvice {
             } else {
                 record = RecordWriter.logExitSimple(sessionId, threadName, timestamp, requestId);
             }
-            RECORD_BUFFER.offer(record);
+            recordBuffer.offer(record);
         } catch (Throwable t) {
             System.err.println("Error recording exit.");
             t.printStackTrace();
         }
     }
 
-    public static Map<String, Object> buildExceptionData(Throwable throwable) {
-        List<String> stacktrace = Stream.of(throwable.getStackTrace())
-                .map(StackTraceElement::toString)
-                .toList();
-        return Map.of(
-                "message", String.valueOf(throwable.getMessage()),
-                "stacktrace", stacktrace
-        );
-    }
-
-    // --- Private: value encoding with truncation ---
-
-    private static byte[] encodeWithLimit(Object obj) throws IOException {
-        byte[] encoded = Codec.encode(obj);
-        if (MAX_VALUE_SIZE > 0 && encoded.length > MAX_VALUE_SIZE) {
-            return Codec.encode(Map.of("__truncated", true, "original_size", encoded.length));
-        }
-        return encoded;
-    }
-
     // --- Private: entry record building ---
 
-    private static byte[] buildSerializedEntry(String sessionId, String signature, String threadName,
-                                                long timestamp, int callerLine,
-                                                long requestId,
-                                                Object self, Object[] allArguments) throws IOException {
+    private byte[] buildSerializedEntry(String sessionId, String signature, String threadName,
+                                         long timestamp, int callerLine,
+                                         long requestId,
+                                         Object self, Object[] allArguments) throws IOException {
         byte[] startRecord = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine,
                 requestId);
 
         byte[] thisRecord = null;
         if (self != null) {
-            if (EXPAND_THIS) {
+            if (expandThis) {
                 thisRecord = RecordWriter.thisInstance(encodeWithLimit(self));
             } else {
                 thisRecord = RecordWriter.thisInstanceRef(ObjectIdRegistry.idOf(self));
@@ -196,6 +165,26 @@ public class DeepFlowAdvice {
         }
 
         return concatOptional(startRecord, thisRecord, argsRecord);
+    }
+
+    // --- Private: value encoding with truncation ---
+
+    private byte[] encodeWithLimit(Object obj) throws IOException {
+        byte[] encoded = Codec.encode(obj);
+        if (maxValueSize > 0 && encoded.length > maxValueSize) {
+            return Codec.encode(Map.of("__truncated", true, "original_size", encoded.length));
+        }
+        return encoded;
+    }
+
+    public static Map<String, Object> buildExceptionData(Throwable throwable) {
+        List<String> stacktrace = Stream.of(throwable.getStackTrace())
+                .map(StackTraceElement::toString)
+                .toList();
+        return Map.of(
+                "message", String.valueOf(throwable.getMessage()),
+                "stacktrace", stacktrace
+        );
     }
 
     private static byte[] concatOptional(byte[]... parts) {
@@ -216,37 +205,35 @@ public class DeepFlowAdvice {
 
     // --- SPI loading (lazy, deferred until first use) ---
 
-    private static SessionIdResolver getResolver() {
-        SessionIdResolver r = SESSION_ID_RESOLVER;
+    private SessionIdResolver getResolver() {
+        SessionIdResolver r = sessionIdResolver;
         if (r != null) return r;
-        synchronized (DeepFlowAdvice.class) {
-            r = SESSION_ID_RESOLVER;
+        synchronized (this) {
+            r = sessionIdResolver;
             if (r != null) return r;
-            r = SpiLoader.loadSessionIdResolver(CONFIG, SpiLoader.resolveClassLoader());
-            SESSION_ID_RESOLVER = r;
+            r = SpiLoader.loadSessionIdResolver(config, SpiLoader.resolveClassLoader());
+            sessionIdResolver = r;
             return r;
         }
     }
 
-    private static void initJpaProxyResolver() {
-        if (JPA_PROXY_RESOLVER_INITIALIZED) return;
-        synchronized (DeepFlowAdvice.class) {
-            if (JPA_PROXY_RESOLVER_INITIALIZED) return;
-            var resolver = SpiLoader.loadJpaProxyResolver(CONFIG, SpiLoader.resolveClassLoader());
+    private void initJpaProxyResolver() {
+        if (jpaProxyResolverInitialized) return;
+        synchronized (this) {
+            if (jpaProxyResolverInitialized) return;
+            var resolver = SpiLoader.loadJpaProxyResolver(config, SpiLoader.resolveClassLoader());
             if (resolver != null) {
                 Codec.setJpaProxyResolver(resolver);
             }
-            JPA_PROXY_RESOLVER_INITIALIZED = true;
+            jpaProxyResolverInitialized = true;
         }
     }
 
     // --- Method signature formatting ---
 
-    private static final String METHOD_FORMAT = "%s.%s(%s) -> %s [%s]";
-
     private static String formatMethodSignature(Method method) {
         String argumentTypes = Arrays.stream(method.getParameterTypes())
-                .map(DeepFlowAdvice::formatClassName)
+                .map(RequestRecorder::formatClassName)
                 .collect(Collectors.joining(", "));
 
         return String.format(METHOD_FORMAT,

@@ -1,5 +1,9 @@
 package com.github.gabert.deepflow.agent;
 
+import com.github.gabert.deepflow.agent.advice.DeepFlowAdvice;
+import com.github.gabert.deepflow.agent.bootstrap.PropagatingRunnable;
+import com.github.gabert.deepflow.agent.bootstrap.RequestContext;
+import com.github.gabert.deepflow.agent.recording.RequestRecorder;
 import com.github.gabert.deepflow.agent.session.SessionIdResolver;
 import com.github.gabert.deepflow.recorder.buffer.UnboundedRecordBuffer;
 import com.github.gabert.deepflow.recorder.destination.RecordRenderer;
@@ -16,9 +20,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * End-to-end tests for DeepFlowAdvice recording logic.
+ * End-to-end tests for the recording logic.
  *
- * Calls recordEntry/recordExit directly (no ByteBuddy, no javaagent),
+ * Calls RequestRecorder.recordEntry/recordExit directly (no ByteBuddy, no javaagent),
  * captures binary records via an injected buffer, and verifies rendered output.
  *
  * Coverage:
@@ -37,6 +41,7 @@ class DeepFlowAdviceRecordingTest {
     };
 
     private UnboundedRecordBuffer buffer;
+    private RequestRecorder recorder;
     private Method voidMethod;
     private Method intMethod;
     private Method objectMethod;
@@ -46,11 +51,10 @@ class DeepFlowAdviceRecordingTest {
         buffer = new UnboundedRecordBuffer();
         RequestContext.CURRENT_REQUEST_ID.get()[0] = 0L;
         RequestContext.DEPTH.get()[0] = 0;
-        DeepFlowAdvice.RECORD_BUFFER = buffer;
 
         configureAdvice("serialize_values=true&expand_this=false");
-        setField("JPA_PROXY_RESOLVER_INITIALIZED", true);
-        setField("SESSION_ID_RESOLVER", NOOP_RESOLVER);
+        setRecorderField("jpaProxyResolverInitialized", true);
+        setRecorderField("sessionIdResolver", NOOP_RESOLVER);
 
         voidMethod = ArrayList.class.getMethod("clear");
         intMethod = ArrayList.class.getMethod("size");
@@ -58,11 +62,10 @@ class DeepFlowAdviceRecordingTest {
     }
 
     @AfterEach
-    void tearDown() throws Exception {
-        DeepFlowAdvice.RECORD_BUFFER = null;
+    void tearDown() {
+        DeepFlowAdvice.RECORDER = null;
         RequestContext.CURRENT_REQUEST_ID.get()[0] = 0L;
         RequestContext.DEPTH.get()[0] = 0;
-        setField("SESSION_ID_RESOLVER", null);
     }
 
     // ==================== BASIC RECORDING ====================
@@ -70,8 +73,8 @@ class DeepFlowAdviceRecordingTest {
     @Test
     void voidMethodRecordsEntryAndExit() {
         String threadName = Thread.currentThread().getName();
-        DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(voidMethod, null, null, new Object[]{});
+        recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(voidMethod, null, null, new Object[]{});
 
         List<String> entry = renderNext();
         assertTrue(hasTag(entry, "MS"));
@@ -94,8 +97,8 @@ class DeepFlowAdviceRecordingTest {
 
     @Test
     void valueReturnRecorded() {
-        DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(intMethod, 42, null, new Object[]{});
+        recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(intMethod, 42, null, new Object[]{});
 
         renderNext();
         List<String> exit = renderNext();
@@ -105,8 +108,8 @@ class DeepFlowAdviceRecordingTest {
 
     @Test
     void exceptionRecorded() {
-        DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(intMethod, null, new RuntimeException("test error"), new Object[]{});
+        recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(intMethod, null, new RuntimeException("test error"), new Object[]{});
 
         renderNext();
         List<String> exit = renderNext();
@@ -119,8 +122,8 @@ class DeepFlowAdviceRecordingTest {
     @Test
     void argumentsSerialized() {
         Object[] args = {"hello", 42, true};
-        DeepFlowAdvice.recordEntry(objectMethod, new HashMap<>(), args);
-        DeepFlowAdvice.recordExit(objectMethod, null, null, args);
+        recorder.recordEntry(objectMethod, new HashMap<>(), args);
+        recorder.recordExit(objectMethod, null, null, args);
 
         List<String> entry = renderNext();
         String ar = findTag(entry, "AR");
@@ -131,8 +134,8 @@ class DeepFlowAdviceRecordingTest {
     @Test
     void staticMethodHasNoThisInstance() throws Exception {
         Method staticMethod = Collections.class.getMethod("emptyList");
-        DeepFlowAdvice.recordEntry(staticMethod, null, new Object[]{});
-        DeepFlowAdvice.recordExit(staticMethod, List.of(), null, new Object[]{});
+        recorder.recordEntry(staticMethod, null, new Object[]{});
+        recorder.recordExit(staticMethod, List.of(), null, new Object[]{});
 
         List<String> entry = renderNext();
         assertFalse(hasTag(entry, "TI"), "Static method (self=null) should not have TI");
@@ -141,8 +144,8 @@ class DeepFlowAdviceRecordingTest {
     @Test
     void thisInstanceRefWhenExpandFalse() {
         Object self = new ArrayList<>(List.of("a", "b"));
-        DeepFlowAdvice.recordEntry(intMethod, self, new Object[]{});
-        DeepFlowAdvice.recordExit(intMethod, 2, null, new Object[]{});
+        recorder.recordEntry(intMethod, self, new Object[]{});
+        recorder.recordExit(intMethod, 2, null, new Object[]{});
 
         List<String> entry = renderNext();
         String ti = findTag(entry, "TI");
@@ -155,8 +158,8 @@ class DeepFlowAdviceRecordingTest {
         configureAdvice("serialize_values=true&expand_this=true");
 
         Map<String, String> self = new HashMap<>(Map.of("field", "value"));
-        DeepFlowAdvice.recordEntry(objectMethod, self, new Object[]{"key"});
-        DeepFlowAdvice.recordExit(objectMethod, null, null, new Object[]{"key"});
+        recorder.recordEntry(objectMethod, self, new Object[]{"key"});
+        recorder.recordExit(objectMethod, null, null, new Object[]{"key"});
 
         List<String> entry = renderNext();
         String ti = findTag(entry, "TI");
@@ -169,8 +172,8 @@ class DeepFlowAdviceRecordingTest {
 
     @Test
     void entryAndExitShareSameRequestId() {
-        DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
+        recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(intMethod, 0, null, new Object[]{});
 
         String entryRI = findTag(renderNext(), "RI");
         String exitRI = findTag(renderNext(), "RI");
@@ -180,10 +183,10 @@ class DeepFlowAdviceRecordingTest {
 
     @Test
     void nestedCallsShareSameRequestId() {
-        DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
-        DeepFlowAdvice.recordExit(voidMethod, null, null, new Object[]{});
+        recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(intMethod, 0, null, new Object[]{});
+        recorder.recordExit(voidMethod, null, null, new Object[]{});
 
         String rootEntryRI = findTag(renderNext(), "RI");
         String nestedEntryRI = findTag(renderNext(), "RI");
@@ -199,14 +202,14 @@ class DeepFlowAdviceRecordingTest {
     @Test
     void sequentialRootCallsGetDifferentRequestIds() {
         // First root call
-        DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(voidMethod, null, null, new Object[]{});
+        recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(voidMethod, null, null, new Object[]{});
         String firstRI = findTag(renderNext(), "RI");
         renderNext();
 
         // Second root call — depth back to 0, new request ID
-        DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(voidMethod, null, null, new Object[]{});
+        recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(voidMethod, null, null, new Object[]{});
         String secondRI = findTag(renderNext(), "RI");
 
         assertNotEquals(firstRI, secondRI);
@@ -216,10 +219,10 @@ class DeepFlowAdviceRecordingTest {
     void deepNestingMaintainsSameRequestId() {
         int levels = 5;
         for (int i = 0; i < levels; i++) {
-            DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+            recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
         }
         for (int i = 0; i < levels; i++) {
-            DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
+            recorder.recordExit(intMethod, 0, null, new Object[]{});
         }
 
         String firstRI = findTag(renderNext(), "RI");
@@ -235,17 +238,17 @@ class DeepFlowAdviceRecordingTest {
     @Test
     void sameThreadSequentialRequestsGetDifferentIds() {
         // Request 1: root + nested
-        DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
-        DeepFlowAdvice.recordExit(voidMethod, null, null, new Object[]{});
+        recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(intMethod, 0, null, new Object[]{});
+        recorder.recordExit(voidMethod, null, null, new Object[]{});
 
         String req1RI = findTag(renderNext(), "RI");
         renderNext(); renderNext(); renderNext();
 
         // Request 2 on same thread — depth is back to 0
-        DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(voidMethod, null, null, new Object[]{});
+        recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(voidMethod, null, null, new Object[]{});
 
         String req2RI = findTag(renderNext(), "RI");
         assertNotEquals(req1RI, req2RI, "Reused thread must generate new request ID per root call");
@@ -255,13 +258,13 @@ class DeepFlowAdviceRecordingTest {
 
     @Test
     void propagatedTaskSharesParentRequestId() throws Exception {
-        DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
         long parentRequestId = RequestContext.CURRENT_REQUEST_ID.get()[0];
 
         CountDownLatch latch = new CountDownLatch(1);
         Runnable task = new PropagatingRunnable(() -> {
-            DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-            DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
+            recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+            recorder.recordExit(intMethod, 0, null, new Object[]{});
             latch.countDown();
         }, parentRequestId);
 
@@ -270,7 +273,7 @@ class DeepFlowAdviceRecordingTest {
         latch.await();
         executor.shutdown();
 
-        DeepFlowAdvice.recordExit(voidMethod, null, null, new Object[]{});
+        recorder.recordExit(voidMethod, null, null, new Object[]{});
 
         // Buffer order: parent entry, child entry, child exit, parent exit
         String parentEntryRI = findTag(renderNext(), "RI");
@@ -286,16 +289,16 @@ class DeepFlowAdviceRecordingTest {
 
     @Test
     void propagatedNestedCallsShareRequestId() throws Exception {
-        DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
         long parentRequestId = RequestContext.CURRENT_REQUEST_ID.get()[0];
 
         CountDownLatch latch = new CountDownLatch(1);
         Runnable task = new PropagatingRunnable(() -> {
             // Two nested calls in child thread
-            DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-            DeepFlowAdvice.recordEntry(objectMethod, new HashMap<>(), new Object[]{"k"});
-            DeepFlowAdvice.recordExit(objectMethod, null, null, new Object[]{"k"});
-            DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
+            recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+            recorder.recordEntry(objectMethod, new HashMap<>(), new Object[]{"k"});
+            recorder.recordExit(objectMethod, null, null, new Object[]{"k"});
+            recorder.recordExit(intMethod, 0, null, new Object[]{});
             latch.countDown();
         }, parentRequestId);
 
@@ -303,7 +306,7 @@ class DeepFlowAdviceRecordingTest {
         executor.execute(task);
         latch.await();
         executor.shutdown();
-        DeepFlowAdvice.recordExit(voidMethod, null, null, new Object[]{});
+        recorder.recordExit(voidMethod, null, null, new Object[]{});
 
         // All 6 records (3 entries + 3 exits) should share the same RI
         String expectedRI = findTag(renderNext(), "RI");
@@ -323,16 +326,16 @@ class DeepFlowAdviceRecordingTest {
 
         Thread t1 = new Thread(() -> {
             awaitQuietly(startLatch);
-            DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+            recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
             thread1Id.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
-            DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
+            recorder.recordExit(intMethod, 0, null, new Object[]{});
             doneLatch.countDown();
         });
         Thread t2 = new Thread(() -> {
             awaitQuietly(startLatch);
-            DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+            recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
             thread2Id.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
-            DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
+            recorder.recordExit(intMethod, 0, null, new Object[]{});
             doneLatch.countDown();
         });
 
@@ -352,8 +355,8 @@ class DeepFlowAdviceRecordingTest {
     void serializeValuesFalseEmitsOnlyStructuralRecords() throws Exception {
         configureAdvice("serialize_values=false");
 
-        DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{"arg"});
-        DeepFlowAdvice.recordExit(intMethod, 42, null, new Object[]{"arg"});
+        recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{"arg"});
+        recorder.recordExit(intMethod, 42, null, new Object[]{"arg"});
 
         List<String> entry = renderNext();
         assertTrue(hasTag(entry, "MS"));
@@ -378,8 +381,8 @@ class DeepFlowAdviceRecordingTest {
         configureAdvice("serialize_values=true&expand_this=false&emit_tags=TS,TE");
 
         Object self = new ArrayList<>(List.of("data"));
-        DeepFlowAdvice.recordEntry(intMethod, self, new Object[]{"arg"});
-        DeepFlowAdvice.recordExit(intMethod, 42, null, new Object[]{"arg"});
+        recorder.recordEntry(intMethod, self, new Object[]{"arg"});
+        recorder.recordExit(intMethod, 42, null, new Object[]{"arg"});
 
         List<String> entry = renderNext();
         assertTrue(hasTag(entry, "MS"), "MS is always emitted");
@@ -400,8 +403,8 @@ class DeepFlowAdviceRecordingTest {
                 + "&emit_tags=SI,TN,RI,TS,CL,TI,AR,RT,RE,TE,AX");
 
         Object[] args = {"mutable"};
-        DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), args);
-        DeepFlowAdvice.recordExit(voidMethod, null, null, args);
+        recorder.recordEntry(voidMethod, new ArrayList<>(), args);
+        recorder.recordExit(voidMethod, null, null, args);
 
         renderNext();
         List<String> exit = renderNext();
@@ -413,11 +416,12 @@ class DeepFlowAdviceRecordingTest {
 
     @Test
     void sessionIdRecordedWhenResolverReturnsValue() throws Exception {
-        setField("SESSION_ID_RESOLVER", null);
         configureAdvice("serialize_values=true&expand_this=false&session_resolver=test");
+        // Leave sessionIdResolver unset on the new recorder so lazy init via
+        // SpiLoader resolves the configured "test" SPI from the test classpath.
 
-        DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
+        recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(intMethod, 0, null, new Object[]{});
 
         List<String> entry = renderNext();
         assertEquals("test-session-123", findTag(entry, "SI"));
@@ -425,8 +429,8 @@ class DeepFlowAdviceRecordingTest {
 
     @Test
     void noSessionIdWhenResolverReturnsNull() {
-        DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-        DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
+        recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
+        recorder.recordExit(intMethod, 0, null, new Object[]{});
 
         assertFalse(hasTag(renderNext(), "SI"), "No SI when resolver returns null");
     }
@@ -437,9 +441,9 @@ class DeepFlowAdviceRecordingTest {
     void largeReturnValueTruncated() throws Exception {
         configureAdvice("serialize_values=true&expand_this=false&max_value_size=64");
 
-        DeepFlowAdvice.recordEntry(objectMethod, new HashMap<>(), new Object[]{"key"});
+        recorder.recordEntry(objectMethod, new HashMap<>(), new Object[]{"key"});
         String bigValue = "x".repeat(500);
-        DeepFlowAdvice.recordExit(objectMethod, bigValue, null, new Object[]{"key"});
+        recorder.recordExit(objectMethod, bigValue, null, new Object[]{"key"});
 
         renderNext();
         List<String> exit = renderNext();
@@ -453,8 +457,8 @@ class DeepFlowAdviceRecordingTest {
     void smallReturnValueNotTruncated() throws Exception {
         configureAdvice("serialize_values=true&expand_this=false&max_value_size=64000");
 
-        DeepFlowAdvice.recordEntry(objectMethod, new HashMap<>(), new Object[]{"key"});
-        DeepFlowAdvice.recordExit(objectMethod, "short", null, new Object[]{"key"});
+        recorder.recordEntry(objectMethod, new HashMap<>(), new Object[]{"key"});
+        recorder.recordExit(objectMethod, "short", null, new Object[]{"key"});
 
         renderNext();
         List<String> exit = renderNext();
@@ -468,8 +472,8 @@ class DeepFlowAdviceRecordingTest {
         configureAdvice("serialize_values=true&expand_this=false&max_value_size=64");
 
         String bigArg = "y".repeat(500);
-        DeepFlowAdvice.recordEntry(objectMethod, new HashMap<>(), new Object[]{bigArg});
-        DeepFlowAdvice.recordExit(objectMethod, null, null, new Object[]{bigArg});
+        recorder.recordEntry(objectMethod, new HashMap<>(), new Object[]{bigArg});
+        recorder.recordExit(objectMethod, null, null, new Object[]{bigArg});
 
         List<String> entry = renderNext();
         String ar = findTag(entry, "AR");
@@ -481,8 +485,8 @@ class DeepFlowAdviceRecordingTest {
         configureAdvice("serialize_values=true&expand_this=false&max_value_size=0");
 
         String bigValue = "z".repeat(500);
-        DeepFlowAdvice.recordEntry(objectMethod, new HashMap<>(), new Object[]{bigValue});
-        DeepFlowAdvice.recordExit(objectMethod, bigValue, null, new Object[]{bigValue});
+        recorder.recordEntry(objectMethod, new HashMap<>(), new Object[]{bigValue});
+        recorder.recordExit(objectMethod, bigValue, null, new Object[]{bigValue});
 
         List<String> entry = renderNext();
         assertFalse(findTag(entry, "AR").contains("__truncated"),
@@ -497,14 +501,8 @@ class DeepFlowAdviceRecordingTest {
 
     private void configureAdvice(String agentArgs) throws Exception {
         AgentConfig config = AgentConfig.getInstance(agentArgs);
-        DeepFlowAdvice.CONFIG = config;
-        setField("SERIALIZE_VALUES", config.isSerializeValues());
-        setField("EXPAND_THIS", config.isExpandThis());
-        setField("EMIT_TI", config.shouldEmit("TI"));
-        setField("EMIT_AR", config.shouldEmit("AR"));
-        setField("EMIT_RT", config.shouldEmit("RT") || config.shouldEmit("RE"));
-        setField("EMIT_AX", config.shouldEmit("AX"));
-        setField("MAX_VALUE_SIZE", config.getMaxValueSize());
+        recorder = new RequestRecorder(buffer, config);
+        DeepFlowAdvice.RECORDER = recorder;
     }
 
     private List<String> renderNext() {
@@ -529,10 +527,10 @@ class DeepFlowAdviceRecordingTest {
         assertNull(buffer.poll(), "Expected no more records in buffer");
     }
 
-    private static void setField(String name, Object value) throws Exception {
-        Field field = DeepFlowAdvice.class.getDeclaredField(name);
+    private void setRecorderField(String name, Object value) throws Exception {
+        Field field = RequestRecorder.class.getDeclaredField(name);
         field.setAccessible(true);
-        field.set(null, value);
+        field.set(recorder, value);
     }
 
     private static void awaitQuietly(CountDownLatch latch) {

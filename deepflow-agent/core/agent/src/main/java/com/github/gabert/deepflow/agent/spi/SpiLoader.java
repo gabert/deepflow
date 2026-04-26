@@ -1,21 +1,22 @@
-package com.github.gabert.deepflow.agent;
+package com.github.gabert.deepflow.agent.spi;
 
+import com.github.gabert.deepflow.agent.AgentConfig;
 import com.github.gabert.deepflow.agent.session.SessionIdResolver;
 import com.github.gabert.deepflow.jpaproxy.JpaProxyResolver;
 
 import java.util.ServiceLoader;
 import java.util.function.Function;
 
-final class SpiLoader {
+public final class SpiLoader {
 
     private SpiLoader() {}
 
-    static final SessionIdResolver NOOP_RESOLVER = new SessionIdResolver() {
+    public static final SessionIdResolver NOOP_RESOLVER = new SessionIdResolver() {
         @Override public String name() { return "noop"; }
         @Override public String resolve() { return null; }
     };
 
-    static SessionIdResolver loadSessionIdResolver(AgentConfig config, ClassLoader classLoader) {
+    public static SessionIdResolver loadSessionIdResolver(AgentConfig config, ClassLoader classLoader) {
         String name = config.getSessionResolver();
         if (name == null) {
             System.err.println("[DeepFlow] SessionIdResolver: no session_resolver configured, using built-in noop");
@@ -29,7 +30,7 @@ final class SpiLoader {
         return NOOP_RESOLVER;
     }
 
-    static JpaProxyResolver loadJpaProxyResolver(AgentConfig config, ClassLoader classLoader) {
+    public static JpaProxyResolver loadJpaProxyResolver(AgentConfig config, ClassLoader classLoader) {
         String name = config.getJpaProxyResolver();
         if (name == null) {
             System.err.println("[DeepFlow] JpaProxyResolver: no jpa_proxy_resolver configured, proxy unwrapping disabled");
@@ -43,7 +44,7 @@ final class SpiLoader {
         return null;
     }
 
-    static ClassLoader resolveClassLoader() {
+    public static ClassLoader resolveClassLoader() {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         return cl != null ? cl : ClassLoader.getSystemClassLoader();
     }

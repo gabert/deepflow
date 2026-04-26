@@ -1,5 +1,8 @@
-package com.github.gabert.deepflow.agent;
+package com.github.gabert.deepflow.agent.advice;
 
+import com.github.gabert.deepflow.agent.bootstrap.PropagatingCallable;
+import com.github.gabert.deepflow.agent.bootstrap.PropagatingRunnable;
+import com.github.gabert.deepflow.agent.bootstrap.RequestContext;
 import net.bytebuddy.asm.Advice;
 
 public class ForkJoinAdvice {

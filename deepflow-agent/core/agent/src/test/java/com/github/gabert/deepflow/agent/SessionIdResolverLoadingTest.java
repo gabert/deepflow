@@ -1,6 +1,7 @@
 package com.github.gabert.deepflow.agent;
 
 import com.github.gabert.deepflow.agent.session.SessionIdResolver;
+import com.github.gabert.deepflow.agent.spi.SpiLoader;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
