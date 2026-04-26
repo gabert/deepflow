@@ -5,6 +5,7 @@ import com.github.gabert.deepflow.agent.bootstrap.PropagatingRunnable;
 import com.github.gabert.deepflow.agent.bootstrap.RequestContext;
 import com.github.gabert.deepflow.agent.recording.RequestRecorder;
 import com.github.gabert.deepflow.agent.session.SessionIdResolver;
+import com.github.gabert.deepflow.agent.spi.SpiBootstrap;
 import com.github.gabert.deepflow.recorder.buffer.UnboundedRecordBuffer;
 import com.github.gabert.deepflow.recorder.destination.RecordRenderer;
 import org.junit.jupiter.api.AfterEach;
@@ -53,8 +54,8 @@ class DeepFlowAdviceRecordingTest {
         RequestContext.DEPTH.get()[0] = 0;
 
         configureAdvice("serialize_values=true&expand_this=false");
-        setRecorderField("jpaProxyResolverInitialized", true);
-        setRecorderField("sessionIdResolver", NOOP_RESOLVER);
+        setSpiField("jpaProxyResolverInitialized", true);
+        setSpiField("sessionIdResolver", NOOP_RESOLVER);
 
         voidMethod = ArrayList.class.getMethod("clear");
         intMethod = ArrayList.class.getMethod("size");
@@ -527,10 +528,13 @@ class DeepFlowAdviceRecordingTest {
         assertNull(buffer.poll(), "Expected no more records in buffer");
     }
 
-    private void setRecorderField(String name, Object value) throws Exception {
-        Field field = RequestRecorder.class.getDeclaredField(name);
+    private void setSpiField(String name, Object value) throws Exception {
+        Field spiField = RequestRecorder.class.getDeclaredField("spi");
+        spiField.setAccessible(true);
+        SpiBootstrap spi = (SpiBootstrap) spiField.get(recorder);
+        Field field = SpiBootstrap.class.getDeclaredField(name);
         field.setAccessible(true);
-        field.set(recorder, value);
+        field.set(spi, value);
     }
 
     private static void awaitQuietly(CountDownLatch latch) {
