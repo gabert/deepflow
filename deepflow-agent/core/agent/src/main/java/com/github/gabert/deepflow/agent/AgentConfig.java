@@ -40,8 +40,6 @@ public class AgentConfig {
         this.maxValueSize = Integer.parseInt(configMap.getOrDefault("max_value_size", "0"));
         this.destination = configMap.getOrDefault("destination", "file");
         this.emitTags = ConfigLoader.parseEmitTags(configMap.get("emit_tags"), DEFAULT_EMIT_TAGS);
-
-        publishSystemProperties(configMap);
     }
 
     public List<String> getMatchersInclude() {
@@ -107,12 +105,5 @@ public class AgentConfig {
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
-    }
-
-    private static void publishSystemProperties(Map<String, String> configMap) {
-        String sessionId = configMap.get("session_id");
-        if (sessionId != null) {
-            System.setProperty("deepflow.session_id", sessionId);
-        }
     }
 }

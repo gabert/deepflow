@@ -37,6 +37,7 @@ public final class SpiBootstrap {
             r = sessionIdResolver;
             if (r != null) return r;
             r = SpiLoader.loadSessionIdResolver(config, SpiLoader.resolveClassLoader());
+            r.init(config.getConfigMap());
             sessionIdResolver = r;
             return r;
         }

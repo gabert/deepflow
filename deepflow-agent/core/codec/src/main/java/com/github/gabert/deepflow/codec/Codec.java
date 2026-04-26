@@ -68,82 +68,82 @@ public final class Codec {
       return JSON_MAPPER.writeValueAsString(humanize(decoded));
    }
 
-   @SuppressWarnings("unchecked")
    private static Object humanize(Object obj) {
-      if (obj instanceof Map<?, ?> map) {
-         return humanizeMap(map);
-      }
-      if (obj instanceof List<?> list) {
-         List<Object> result = new ArrayList<>(list.size());
-         for (Object item : list) {
-            result.add(humanize(item));
-         }
-         return result;
-      }
+      if (obj instanceof Map<?, ?> map) return humanizeMap(map);
+      if (obj instanceof List<?> list) return humanizeList(list);
       return obj;
    }
 
+   private static List<Object> humanizeList(List<?> list) {
+      List<Object> result = new ArrayList<>(list.size());
+      for (Object item : list) result.add(humanize(item));
+      return result;
+   }
+
    private static Object humanizeMap(Map<?, ?> map) {
-      String objectIdKey = String.valueOf(FieldIds.OBJECT_ID);
-      String classKey = String.valueOf(FieldIds.CLASS_NAME);
-      String valueKey = String.valueOf(FieldIds.VALUE);
-      String refIdKey = String.valueOf(FieldIds.REF_ID);
-      String cycleRefKey = String.valueOf(FieldIds.CYCLE_REF);
+      if (hasField(map, FieldIds.REF_ID))                  return humanizeCycleRef(map);
+      if (hasField(map, FieldIds.OBJECT_ID)
+              && hasField(map, FieldIds.CLASS_NAME))       return humanizeEnvelope(map);
+      return humanizeRegularMap(map);
+   }
 
-      // Cycle back-reference — pass through with readable keys
-      if (map.containsKey(Integer.valueOf(FieldIds.REF_ID))
-              || map.containsKey(refIdKey)) {
-         LinkedHashMap<String, Object> result = new LinkedHashMap<>();
-         for (Map.Entry<?, ?> entry : map.entrySet()) {
-            String key = String.valueOf(entry.getKey());
-            if (key.equals(String.valueOf(FieldIds.REF_ID)) || key.equals(refIdKey))
-               result.put("ref_id", entry.getValue());
-            else if (key.equals(String.valueOf(FieldIds.CYCLE_REF)) || key.equals(cycleRefKey))
-               result.put("cycle_ref", entry.getValue());
-            else
-               result.put(key, humanize(entry.getValue()));
-         }
-         return result;
+   /** Cycle back-reference: rename the field-id keys to readable names, pass through. */
+   private static Map<String, Object> humanizeCycleRef(Map<?, ?> map) {
+      LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+      for (Map.Entry<?, ?> entry : map.entrySet()) {
+         String name = renameCycleRefKey(String.valueOf(entry.getKey()));
+         result.put(name, name.equals("ref_id") || name.equals("cycle_ref")
+                 ? entry.getValue()
+                 : humanize(entry.getValue()));
       }
+      return result;
+   }
 
-      // Envelope: flatten object_id/class inline with the value fields
-      Object rawObjectId = map.get(Integer.valueOf(FieldIds.OBJECT_ID));
-      if (rawObjectId == null) rawObjectId = map.get(objectIdKey);
-      Object rawClassName = map.get(Integer.valueOf(FieldIds.CLASS_NAME));
-      if (rawClassName == null) rawClassName = map.get(classKey);
-      Object rawValue = map.get(Integer.valueOf(FieldIds.VALUE));
-      if (rawValue == null) rawValue = map.get(valueKey);
+   private static String renameCycleRefKey(String key) {
+      if (key.equals(String.valueOf(FieldIds.REF_ID))) return "ref_id";
+      if (key.equals(String.valueOf(FieldIds.CYCLE_REF))) return "cycle_ref";
+      return key;
+   }
 
-      if (rawObjectId != null && rawClassName != null) {
-         // This is an envelope node — flatten it
-         LinkedHashMap<String, Object> result = new LinkedHashMap<>();
-         result.put("object_id", rawObjectId);
-         result.put("class", rawClassName);
+   /** Envelope node: flatten object_id/class with the inner value fields as siblings. */
+   private static Map<String, Object> humanizeEnvelope(Map<?, ?> map) {
+      LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+      result.put("object_id", getField(map, FieldIds.OBJECT_ID));
+      result.put("class", getField(map, FieldIds.CLASS_NAME));
 
-         if (rawValue instanceof Map<?, ?> valueMap) {
-            // POJO / Map: inline all fields as siblings of object_id/class
-            for (Map.Entry<?, ?> entry : valueMap.entrySet()) {
-               result.put(String.valueOf(entry.getKey()), humanize(entry.getValue()));
-            }
-         } else if (rawValue instanceof List<?> valueList) {
-            // Collection / array: put under "items" key
-            List<Object> items = new ArrayList<>(valueList.size());
-            for (Object item : valueList) {
-               items.add(humanize(item));
-            }
-            result.put("items", items);
-         } else {
-            // Scalar (e.g. "<proxy>" string)
-            result.put("value", rawValue);
+      Object rawValue = getField(map, FieldIds.VALUE);
+      if (rawValue instanceof Map<?, ?> valueMap) {
+         // POJO / Map: inline fields as siblings of object_id/class.
+         for (Map.Entry<?, ?> entry : valueMap.entrySet()) {
+            result.put(String.valueOf(entry.getKey()), humanize(entry.getValue()));
          }
-         return result;
+      } else if (rawValue instanceof List<?> valueList) {
+         // Collection / array: put under "items".
+         result.put("items", humanizeList(valueList));
+      } else {
+         // Scalar (e.g. "<proxy>" string).
+         result.put("value", rawValue);
       }
+      return result;
+   }
 
-      // Not an envelope — regular map, just humanize keys/values
+   /** Plain map (no envelope or cycle markers): just humanize keys and values. */
+   private static Map<String, Object> humanizeRegularMap(Map<?, ?> map) {
       LinkedHashMap<String, Object> result = new LinkedHashMap<>();
       for (Map.Entry<?, ?> entry : map.entrySet()) {
          result.put(String.valueOf(entry.getKey()), humanize(entry.getValue()));
       }
       return result;
+   }
+
+   /** CBOR field ids may decode as Integer or String depending on the path. */
+   private static boolean hasField(Map<?, ?> map, int fieldId) {
+      return map.containsKey(Integer.valueOf(fieldId))
+              || map.containsKey(String.valueOf(fieldId));
+   }
+
+   private static Object getField(Map<?, ?> map, int fieldId) {
+      Object value = map.get(Integer.valueOf(fieldId));
+      return value != null ? value : map.get(String.valueOf(fieldId));
    }
 }

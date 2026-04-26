@@ -1,5 +1,7 @@
 package com.github.gabert.deepflow.agent.session;
 
+import java.util.Map;
+
 /**
  * SPI for resolving the current logical session ID from framework-specific
  * thread-local state (e.g. Servlet session, Spring request context).
@@ -21,6 +23,16 @@ public interface SessionIdResolver {
      * config property (e.g. "config", "servlet", "noop").
      */
     String name();
+
+    /**
+     * Called once after the resolver is selected by the agent, before any
+     * call to {@link #resolve()}. Implementations that need configuration
+     * (e.g. a static session ID from the agent config) should read it from
+     * the supplied map. Default no-op for resolvers that don't need it.
+     *
+     * @param config the agent's effective configuration (CLI args + file)
+     */
+    default void init(Map<String, String> config) {}
 
     /**
      * Return the current session/request ID for the calling thread,
