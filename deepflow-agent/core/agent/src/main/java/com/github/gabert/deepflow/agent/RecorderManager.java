@@ -3,13 +3,10 @@ package com.github.gabert.deepflow.agent;
 import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
 import com.github.gabert.deepflow.recorder.buffer.UnboundedRecordBuffer;
 import com.github.gabert.deepflow.recorder.destination.Destination;
+import com.github.gabert.deepflow.recorder.destination.DestinationRegistry;
 import com.github.gabert.deepflow.recorder.destination.RecordDrainer;
-import com.github.gabert.deepflow.recorder.destination.FileDestination;
-import com.github.gabert.deepflow.recorder.destination.HttpDestination;
-import com.github.gabert.deepflow.recorder.destination.TestDestination;
 
 import java.io.IOException;
-import java.util.Map;
 
 /**
  * Owns the recorder lifecycle: buffer, drainer, destination, and shutdown hook.
@@ -27,7 +24,8 @@ public final class RecorderManager {
 
     public static RecorderManager create(AgentConfig config) {
         try {
-            Destination destination = createDestination(config.getDestination(), config.getConfigMap());
+            Destination destination = DestinationRegistry.create(
+                    config.getDestination(), config.getConfigMap());
 
             RecordBuffer buffer = new UnboundedRecordBuffer();
             RecordDrainer drainer = new RecordDrainer(buffer, destination);
@@ -45,21 +43,6 @@ public final class RecorderManager {
 
     public RecordBuffer getBuffer() {
         return buffer;
-    }
-
-    // --- Destination factory ---
-
-    private static Destination createDestination(String type, Map<String, String> config) {
-        if ("file".equals(type)) {
-            return new FileDestination(config);
-        }
-        if ("http".equals(type)) {
-            return new HttpDestination(config);
-        }
-        if ("test".equals(type)) {
-            return new TestDestination(config);
-        }
-        throw new IllegalArgumentException("Unknown destination type: " + type);
     }
 
     // --- Lifecycle ---
