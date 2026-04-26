@@ -49,12 +49,16 @@ produce the same trace files -- the difference is who reads them.
 and reads the trace directly. The `.dft` files are structured text --
 method signatures, argument values, return values, timestamps -- readable
 in any editor. This is the primary mode. No AI, no external tools, no
-upload. You run the code, you read the trace, you find the bug. This
-mode is essential in environments where data sensitivity prohibits
-sending runtime values to any external system, including LLMs. Financial
+upload. You run the code, you read the trace, you find the bug.
+
+This mode matters for two reasons. First, data sensitivity: financial
 transactions, classified data, patient records, cryptographic material --
-when the trace contains data that must not leave the machine, only a
-verified human debugs locally.
+when the trace contains values that must not leave the machine, only a
+verified human debugs locally. No external system, including LLMs, ever
+sees the data. Second, cost: LLM-based analysis of detailed traces
+consumes significant tokens and adds up quickly. A developer reading a
+structured trace file in an editor costs nothing beyond their time and
+is often faster for focused debugging.
 
 **AI-assisted mode.** The same trace files can be fed to an LLM for
 automated analysis. The Python formatter (`deepflow-formater`) can output
