@@ -37,6 +37,21 @@ the application. For every instrumented method it captures:
 
 No code changes. No annotations. No SDK. Just attach and run.
 
+The result is a complete recording of what happened during execution --
+every method call with its actual data, ordered in time. Think of it as
+a debugging session that you can move forward and backward through without
+restarting the application or reproducing the scenario. The data is
+already there: every argument, every return value, every mutation,
+timestamped to the nanosecond. You navigate the recording, not the live
+process.
+
+Because traces are deterministic records, a verified trace can serve as
+a baseline. Run the same scenario after a code change and compare the
+two traces. If the data flow changed, you see exactly where it diverged --
+which method received different arguments, which return value shifted.
+This turns traces into regression tests over actual runtime data, not
+just over expected outputs.
+
 The agent supports two destinations. **File** writes structured text files
 locally (one `.dft` file per thread) -- suitable for local debugging and
 development. **HTTP** sends binary records to a collector server that
@@ -124,7 +139,14 @@ object identity tracking with zero code changes.
 ## Use cases
 
 **Debugging data errors.** Reproduce the scenario, read the trace. See
-where the correct value goes in and the wrong one comes out.
+where the correct value goes in and the wrong one comes out. Move forward
+and backward through the recording without restarting the application --
+the full execution is already captured.
+
+**Regression detection.** Record a verified flow as a baseline. After a
+code change, run the same scenario and compare traces. If the data flow
+diverged -- different arguments, different return values, a mutation that
+wasn't there before -- you see exactly which method changed.
 
 **Understanding unfamiliar code.** Instrument the packages, trigger a user
 flow, read the trace. Real execution with real data.
