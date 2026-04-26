@@ -37,46 +37,53 @@ the application. For every instrumented method it captures:
 
 No code changes. No annotations. No SDK. Just attach and run.
 
-The output is structured text files (one per thread) that you can read
-directly, diff between runs, or feed into analysis tools.
+The agent supports two destinations. **File** writes structured text files
+locally (one `.dft` file per thread) -- suitable for local debugging and
+development. **HTTP** sends binary records to a collector server that
+stores them via Kafka into ClickHouse -- suitable for shared environments,
+production tracing, and team-wide analysis through a query interface.
+
+Both destinations capture the same data. The difference is where it lands.
 
 ## Two modes of use
 
 DeepFlow is designed to work in two modes. Both use the same agent and
-produce the same trace files -- the difference is who reads them.
+produce the same trace data -- the difference is who reads them.
 
 **Human mode.** A developer attaches the agent, reproduces the scenario,
-and reads the trace directly. The `.dft` files are structured text --
-method signatures, argument values, return values, timestamps -- readable
-in any editor. This is the primary mode. No AI, no external tools, no
-upload. You run the code, you read the trace, you find the bug.
+and reads the trace directly. In file mode, the `.dft` files are
+structured text -- method signatures, argument values, return values,
+timestamps -- readable in any editor. In HTTP mode, the same data is
+queryable from ClickHouse. Either way, a human reads the trace and finds
+the bug. No AI involved.
 
 This mode matters for two reasons. First, data sensitivity: financial
 transactions, classified data, patient records, cryptographic material --
-when the trace contains values that must not leave the machine, only a
-verified human debugs locally. No external system, including LLMs, ever
-sees the data. Second, cost: LLM-based analysis of detailed traces
-consumes significant tokens and adds up quickly. A developer reading a
-structured trace file in an editor costs nothing beyond their time and
+when the trace contains values that must not leave a controlled
+environment, only verified humans access the data. No external system,
+including LLMs, ever sees it. Second, cost: LLM-based analysis of
+detailed traces consumes significant tokens and adds up quickly. A
+developer reading a structured trace costs nothing beyond their time and
 is often faster for focused debugging.
 
-**AI-assisted mode.** The same trace files can be fed to an LLM for
+**AI-assisted mode.** The same trace data can be fed to an LLM for
 automated analysis. The Python formatter (`deepflow-formater`) can output
 traces in a compact semicolon-delimited format designed for token-efficient
 LLM consumption. This is useful for verifying AI-generated code (run the
 feature, feed the trace to a reviewer) or for large traces where manual
 reading is impractical.
 
-Both modes work offline. The trace is a local file. Nothing is sent
-anywhere unless you choose to.
+Both modes can work with either destination. File mode keeps everything
+local. HTTP mode centralizes traces but access is still controlled --
+nothing reaches an LLM unless you choose to send it.
 
 ## Why this matters
 
 **Data bugs are expensive.** A null pointer is found in minutes. A wrong
 calculation that produces plausible results can go undetected for months.
 When it's finally discovered, nobody knows what the data looked like when
-it flowed through the system. With DeepFlow attached, the answer is in the
-trace file.
+it flowed through the system. With DeepFlow attached, the answer is in
+the trace -- locally in `.dft` files or centrally in ClickHouse.
 
 **AI agents write a lot of code.** Tools like Claude Code, Cursor, and
 Copilot are generating significant portions of application code. It
