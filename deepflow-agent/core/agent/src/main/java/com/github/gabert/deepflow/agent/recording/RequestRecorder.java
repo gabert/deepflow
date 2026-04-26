@@ -5,6 +5,7 @@ import com.github.gabert.deepflow.agent.bootstrap.RequestContext;
 import com.github.gabert.deepflow.agent.spi.SpiBootstrap;
 import com.github.gabert.deepflow.codec.envelope.ObjectIdRegistry;
 import com.github.gabert.deepflow.recorder.buffer.RecordBuffer;
+import com.github.gabert.deepflow.recorder.record.BinaryUtil;
 import com.github.gabert.deepflow.recorder.record.RecordWriter;
 
 import java.io.IOException;
@@ -128,7 +129,7 @@ public class RequestRecorder {
                         ? RecordWriter.argumentsExit(exitArgsCbor)
                         : new byte[0];
 
-                record = concatOptional(endRecord, returnRecord, exitArgsRecord);
+                record = BinaryUtil.concat(endRecord, returnRecord, exitArgsRecord);
             } else {
                 record = RecordWriter.logExitSimple(sessionId, threadName, timestamp, requestId);
             }
@@ -162,7 +163,7 @@ public class RequestRecorder {
             argsRecord = RecordWriter.arguments(valueEncoder.encode(allArguments));
         }
 
-        return concatOptional(startRecord, thisRecord, argsRecord);
+        return BinaryUtil.concat(startRecord, thisRecord, argsRecord);
     }
 
     private static Map<String, Object> buildExceptionData(Throwable throwable) {
@@ -175,19 +176,4 @@ public class RequestRecorder {
         );
     }
 
-    private static byte[] concatOptional(byte[]... parts) {
-        int totalLen = 0;
-        for (byte[] part : parts) {
-            if (part != null) totalLen += part.length;
-        }
-        byte[] result = new byte[totalLen];
-        int pos = 0;
-        for (byte[] part : parts) {
-            if (part != null) {
-                System.arraycopy(part, 0, result, pos, part.length);
-                pos += part.length;
-            }
-        }
-        return result;
-    }
 }

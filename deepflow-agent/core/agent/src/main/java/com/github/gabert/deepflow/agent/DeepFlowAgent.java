@@ -158,35 +158,40 @@ public class DeepFlowAgent {
     }
 
     private static void installExecutorInstrumentation(Instrumentation instrumentation) {
+        // We need to retransform JDK classes (ThreadPoolExecutor, ForkJoinPool),
+        // which AgentBuilder.Default ignores by default — hence the empty ignore matcher.
+
         // ThreadPoolExecutor.execute(Runnable) — covers @Async, ExecutorService.submit(),
-        // ScheduledThreadPoolExecutor (extends ThreadPoolExecutor)
-        // Override default ignore rules — AgentBuilder.Default ignores java.* classes,
-        // but we specifically need to retransform ThreadPoolExecutor and ForkJoinPool.
-        new AgentBuilder.Default()
-                .disableClassFormatChanges()
-                .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
-                .ignore(ElementMatchers.none())
-                .type(ElementMatchers.is(ThreadPoolExecutor.class))
-                .transform((builder, type, loader, module, pd) -> builder.visit(
+        // and ScheduledThreadPoolExecutor (which extends ThreadPoolExecutor).
+        retransformJdkType(instrumentation, ThreadPoolExecutor.class,
+                (builder, type, loader, module, pd) -> builder.visit(
                         Advice.to(ExecutorAdvice.class)
                                 .on(ElementMatchers.named("execute")
-                                        .and(ElementMatchers.takesArgument(0, Runnable.class)))))
-                .installOn(instrumentation);
+                                        .and(ElementMatchers.takesArgument(0, Runnable.class)))));
 
-        new AgentBuilder.Default()
-                .disableClassFormatChanges()
-                .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
-                .ignore(ElementMatchers.none())
-                .type(ElementMatchers.is(ForkJoinPool.class))
-                .transform((builder, type, loader, module, pd) -> builder.visit(
-                        Advice.to(ForkJoinAdvice.ExecuteRunnable.class)
+        // ForkJoinPool.execute(Runnable) and submit(Callable) — covers
+        // CompletableFuture chains and ForkJoinPool.commonPool() use.
+        retransformJdkType(instrumentation, ForkJoinPool.class,
+                (builder, type, loader, module, pd) -> builder
+                        .visit(Advice.to(ForkJoinAdvice.ExecuteRunnable.class)
                                 .on(ElementMatchers.named("execute")
                                         .and(ElementMatchers.takesArgument(0, Runnable.class))))
                         .visit(Advice.to(ForkJoinAdvice.SubmitCallable.class)
                                 .on(ElementMatchers.named("submit")
-                                        .and(ElementMatchers.takesArgument(0, java.util.concurrent.Callable.class)))))
-                .installOn(instrumentation);
+                                        .and(ElementMatchers.takesArgument(0, java.util.concurrent.Callable.class)))));
 
         System.out.println("[DeepFlow] Executor instrumentation installed (request ID propagation)");
+    }
+
+    private static void retransformJdkType(Instrumentation instrumentation,
+                                           Class<?> targetType,
+                                           AgentBuilder.Transformer transformer) {
+        new AgentBuilder.Default()
+                .disableClassFormatChanges()
+                .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                .ignore(ElementMatchers.none())
+                .type(ElementMatchers.is(targetType))
+                .transform(transformer)
+                .installOn(instrumentation);
     }
 }

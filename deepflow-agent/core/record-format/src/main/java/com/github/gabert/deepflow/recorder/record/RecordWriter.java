@@ -10,7 +10,6 @@ package com.github.gabert.deepflow.recorder.record;
  * provides ergonomic call sites for the agent's hot path and existing tests.</p>
  */
 public final class RecordWriter {
-    private static final byte[] EMPTY_FRAME = new byte[0];
 
     private RecordWriter() {}
 
@@ -20,43 +19,43 @@ public final class RecordWriter {
                                   long timestamp, int callerLine,
                                   long requestId,
                                   byte[] thisInstanceCbor, byte[] argsCbor) {
-        byte[] start = logEntrySimple(sessionId, signature, threadName, timestamp, callerLine, requestId);
-        byte[] thisFrame = thisInstanceCbor != null ? thisInstance(thisInstanceCbor) : EMPTY_FRAME;
-        byte[] args = arguments(argsCbor);
-        return concat(start, concat(thisFrame, args));
+        return BinaryUtil.concat(
+                logEntrySimple(sessionId, signature, threadName, timestamp, callerLine, requestId),
+                thisInstanceCbor != null ? thisInstance(thisInstanceCbor) : null,
+                arguments(argsCbor));
     }
 
     public static byte[] logEntryWithThisRef(String sessionId, String signature, String threadName,
                                              long timestamp, int callerLine,
                                              long requestId,
                                              long thisInstanceId, byte[] argsCbor) {
-        byte[] start = logEntrySimple(sessionId, signature, threadName, timestamp, callerLine, requestId);
-        byte[] thisRef = thisInstanceRef(thisInstanceId);
-        byte[] args = arguments(argsCbor);
-        return concat(start, concat(thisRef, args));
+        return BinaryUtil.concat(
+                logEntrySimple(sessionId, signature, threadName, timestamp, callerLine, requestId),
+                thisInstanceRef(thisInstanceId),
+                arguments(argsCbor));
     }
 
     // --- Composite: full method exit (end + return) ---
 
     public static byte[] logExit(String sessionId, String threadName, long timestamp,
                                  long requestId, byte[] returnCbor, boolean isVoid) {
-        byte[] end = methodEnd(sessionId, threadName, timestamp, requestId);
-        byte[] ret = isVoid ? returnVoid() : returnValue(returnCbor);
-        return concat(end, ret);
+        return BinaryUtil.concat(
+                methodEnd(sessionId, threadName, timestamp, requestId),
+                isVoid ? returnVoid() : returnValue(returnCbor));
     }
 
     public static byte[] logExitException(String sessionId, String threadName,
                                           long timestamp, long requestId,
                                           byte[] exceptionCbor) {
-        byte[] end = methodEnd(sessionId, threadName, timestamp, requestId);
-        byte[] exc = exception(exceptionCbor);
-        return concat(end, exc);
+        return BinaryUtil.concat(
+                methodEnd(sessionId, threadName, timestamp, requestId),
+                exception(exceptionCbor));
     }
 
     public static byte[] logExitWithArgs(String sessionId, String threadName, long timestamp,
                                          long requestId, byte[] returnCbor, boolean isVoid,
                                          byte[] argsCbor) {
-        return concat(
+        return BinaryUtil.concat(
                 logExit(sessionId, threadName, timestamp, requestId, returnCbor, isVoid),
                 argumentsExit(argsCbor));
     }
@@ -64,7 +63,7 @@ public final class RecordWriter {
     public static byte[] logExitExceptionWithArgs(String sessionId, String threadName,
                                                    long timestamp, long requestId,
                                                    byte[] exceptionCbor, byte[] argsCbor) {
-        return concat(
+        return BinaryUtil.concat(
                 logExitException(sessionId, threadName, timestamp, requestId, exceptionCbor),
                 argumentsExit(argsCbor));
     }
@@ -123,12 +122,4 @@ public final class RecordWriter {
         return VersionRecord.current().toFrame();
     }
 
-    // --- Helpers ---
-
-    private static byte[] concat(byte[] a, byte[] b) {
-        byte[] result = new byte[a.length + b.length];
-        System.arraycopy(a, 0, result, 0, a.length);
-        System.arraycopy(b, 0, result, a.length, b.length);
-        return result;
-    }
 }

@@ -64,4 +64,23 @@ public final class BinaryUtil {
              | ((long)(buf[pos + 6] & 0xFF) << 8)
              | ((long)(buf[pos + 7] & 0xFF));
     }
+
+    // --- Byte-array concat ---
+
+    /** Concatenates byte arrays, skipping any null entries. */
+    public static byte[] concat(byte[]... parts) {
+        int totalLen = 0;
+        for (byte[] part : parts) {
+            if (part != null) totalLen += part.length;
+        }
+        byte[] result = new byte[totalLen];
+        int pos = 0;
+        for (byte[] part : parts) {
+            if (part != null) {
+                System.arraycopy(part, 0, result, pos, part.length);
+                pos += part.length;
+            }
+        }
+        return result;
+    }
 }

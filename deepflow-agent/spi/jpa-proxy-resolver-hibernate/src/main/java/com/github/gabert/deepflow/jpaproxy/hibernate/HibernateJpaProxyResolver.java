@@ -64,15 +64,10 @@ public final class HibernateJpaProxyResolver implements JpaProxyResolver {
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private Object resolveCollectionWrapper(Object wrapper) {
-        try {
-            if (wrapper instanceof List)  return new ArrayList<>((List) wrapper);
-            if (wrapper instanceof Set)   return new LinkedHashSet<>((Set) wrapper);
-            if (wrapper instanceof Map)   return new LinkedHashMap<>((Map) wrapper);
-        } catch (Exception e) {
-            return null;
-        }
+        if (wrapper instanceof List<?> list) return new ArrayList<>(list);
+        if (wrapper instanceof Set<?> set)   return new LinkedHashSet<>(set);
+        if (wrapper instanceof Map<?, ?> map) return new LinkedHashMap<>(map);
         return null;
     }
 }

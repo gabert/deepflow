@@ -1,9 +1,8 @@
 package com.github.gabert.deepflow.processor;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
+import com.github.gabert.deepflow.config.ConfigLoader;
+
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 
 public class ProcessorConfig {
@@ -69,39 +68,7 @@ public class ProcessorConfig {
     }
 
     public static ProcessorConfig load(String[] args) throws IOException {
-        Map<String, String> configMap = new HashMap<>();
-
-        for (String arg : args) {
-            if (arg.contains("=")) {
-                String[] parts = arg.split("=", 2);
-                configMap.put(parts[0].trim(), parts[1].trim());
-            }
-        }
-
-        if (configMap.containsKey("config")) {
-            Map<String, String> fileConfig = loadFromFile(configMap.get("config"));
-            fileConfig.putAll(configMap);
-            configMap = fileConfig;
-        }
-
-        return new ProcessorConfig(configMap);
-    }
-
-    private static Map<String, String> loadFromFile(String filePath) throws IOException {
-        Map<String, String> configMap = new HashMap<>();
-
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                line = line.trim();
-                if (line.startsWith("#") || !line.contains("=")) {
-                    continue;
-                }
-                String[] parts = line.split("=", 2);
-                configMap.put(parts[0].trim(), parts[1].trim());
-            }
-        }
-
-        return configMap;
+        Map<String, String> argMap = ConfigLoader.parseCliArgs(args);
+        return new ProcessorConfig(ConfigLoader.mergeWithFile(argMap));
     }
 }
