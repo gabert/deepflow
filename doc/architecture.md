@@ -69,6 +69,16 @@ the application classpath so they can access framework classes.
 
 ## Key design decisions
 
+### Executor instrumentation requires bootstrap injection
+
+To propagate request IDs across thread boundaries, the agent instruments
+JDK classes (`ThreadPoolExecutor`, `ForkJoinPool`). These classes are loaded
+by the bootstrap classloader and governed by the Java module system, which
+requires special handling: bootstrap class injection, ByteBuddy ignore rule
+overrides, and JPMS module reads edges. See
+[Executor Instrumentation](internals/executor-instrumentation.md) for the
+full explanation.
+
 ### Agent's own packages excluded from instrumentation
 
 The agent must never instrument its own classes. `DeepFlowAgent` adds

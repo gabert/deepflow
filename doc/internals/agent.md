@@ -14,16 +14,24 @@ records to a configured destination (see [serializer.md](serializer.md)).
 JVM loads -javaagent
   -> DeepFlowAgent.premain(agentArgs, instrumentation)
     1. AgentConfig.getInstance(agentArgs)        Parse config file + CLI args
-    2. DeepFlowAdvice.setup(config)              Initialize advice statics
+    2. IF propagate_request_id:
+         injectBootstrapClasses()                Inject RequestContext + wrappers
+         redefineModule(java.base)               Grant module access
+    3. DeepFlowAdvice.setup(config)              Initialize advice statics
        -> RecorderManager.create(config)         Create buffer, destination, drainer
           -> Register JVM shutdown hook           Ensures drain + close on exit
-    3. Build ByteBuddy type matchers              From matchers_include / matchers_exclude
-    4. Install advice on instrumentation          Intercepts matched methods at class load
+    4. Build ByteBuddy type matchers              From matchers_include / matchers_exclude
+    5. Install advice on instrumentation          Intercepts matched methods at class load
+    6. IF propagate_request_id:
+         installExecutorInstrumentation()        Retransform ThreadPoolExecutor, ForkJoinPool
 
   On first instrumented method entry (deferred from startup):
-    5. Load SessionIdResolver via SPI             Lazy, uses context classloader
-    6. Load JpaProxyResolver via SPI              Lazy, registers with Codec
+    7. Load SessionIdResolver via SPI             Lazy, uses context classloader
+    8. Load JpaProxyResolver via SPI              Lazy, registers with Codec
 ```
+
+Step 2 must happen before step 3. See
+[Executor Instrumentation](executor-instrumentation.md) for why.
 
 ## DeepFlowAdvice static fields
 
@@ -40,9 +48,18 @@ entry/exit:
 | `EMIT_TI/AR/RT/AX` | `boolean` | Per-tag serialization gates |
 | `MAX_VALUE_SIZE` | `int` | Truncation cap (0 = unlimited) |
 | `SESSION_ID_RESOLVER` | `SessionIdResolver` | Lazily loaded, volatile |
-| `CURRENT_REQUEST_ID` | `ThreadLocal<long[]>` | Per-thread request ID |
-| `DEPTH` | `ThreadLocal<int[]>` | Per-thread call depth |
-| `REQUEST_COUNTER` | `AtomicLong` | Global request ID generator |
+
+Request ID state lives in `RequestContext` (a separate class injected into
+the bootstrap classloader):
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `RequestContext.CURRENT_REQUEST_ID` | `ThreadLocal<long[]>` | Per-thread request ID |
+| `RequestContext.DEPTH` | `ThreadLocal<int[]>` | Per-thread call depth |
+| `RequestContext.REQUEST_COUNTER` | `AtomicLong` | Global request ID generator |
+
+See [Executor Instrumentation](executor-instrumentation.md) for why these
+fields are in a separate class and how they are injected into bootstrap.
 
 ## Recording flow
 

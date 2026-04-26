@@ -95,8 +95,12 @@ thread's depth counter starts at 0.
 
 Key source locations:
 
-- `DeepFlowAdvice.CURRENT_REQUEST_ID` -- per-thread current request ID
-- `DeepFlowAdvice.DEPTH` -- per-thread call depth
-- `DeepFlowAdvice.REQUEST_COUNTER` -- global atomic counter
+- `RequestContext.CURRENT_REQUEST_ID` -- per-thread current request ID
+- `RequestContext.DEPTH` -- per-thread call depth
+- `RequestContext.REQUEST_COUNTER` -- global atomic counter
 - `RecordWriter.methodStart()` / `methodEnd()` -- requestId in binary payload
 - `RecordRenderer` -- renders RI tag from both METHOD_START and METHOD_END
+
+For details on how cross-thread propagation works at the JVM level
+(bootstrap classloader injection, module system access), see
+[Executor Instrumentation](../internals/executor-instrumentation.md).
