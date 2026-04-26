@@ -6,7 +6,6 @@ import com.github.gabert.deepflow.recorder.record.ExceptionRecord;
 import com.github.gabert.deepflow.recorder.record.MethodEndRecord;
 import com.github.gabert.deepflow.recorder.record.MethodStartRecord;
 import com.github.gabert.deepflow.recorder.record.RecordType;
-import com.github.gabert.deepflow.recorder.record.RecordWriter;
 import com.github.gabert.deepflow.recorder.record.ReturnRecord;
 import com.github.gabert.deepflow.recorder.record.ThisInstanceRecord;
 import com.github.gabert.deepflow.recorder.record.ThisInstanceRefRecord;
@@ -24,101 +23,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Verifies the typed {@link TraceRecord} implementations produce byte-for-byte
- * identical frames to {@link RecordWriter} (the legacy facade) and parse them
- * back into equivalent records. This is the safety net for the upcoming
- * cutover that replaces RecordWriter call sites with direct record
- * construction.
+ * Tests the {@link TraceRecord} dispatcher and per-record round-trips.
+ *
+ * <p>Wire-format byte layout is pinned by {@link WireFormatGoldenTest}; this
+ * test focuses on the typed-record API: that {@link TraceRecord#parse(byte, byte[])}
+ * dispatches to the right subtype, that each record's {@code parse(payload)}
+ * faithfully reverses {@code payloadBytes()}, and that adding a new record
+ * type without wiring it up triggers a test failure.</p>
  */
 class TypedRecordTest {
-
-    // ============================================================
-    //  Typed-record output matches RecordWriter byte-for-byte
-    // ============================================================
-
-    @Test
-    void versionRecord_matchesRecordWriterFrame() {
-        byte[] typed = new VersionRecord((short) 1, (short) 2).toFrame();
-        byte[] legacy = RecordWriter.version((short) 1, (short) 2);
-        assertArrayEquals(legacy, typed);
-    }
-
-    @Test
-    void methodStartRecord_matchesRecordWriterFrame() {
-        byte[] typed = new MethodStartRecord(
-                "S", "M", "T",
-                0x0102030405060708L, 0x0A0B0C0D, 0x1112131415161718L
-        ).toFrame();
-        byte[] legacy = RecordWriter.logEntrySimple(
-                "S", "M", "T",
-                0x0102030405060708L, 0x0A0B0C0D, 0x1112131415161718L);
-        assertArrayEquals(legacy, typed);
-    }
-
-    @Test
-    void methodStartRecord_nullSessionIdMatchesLegacy() {
-        byte[] typed = new MethodStartRecord(null, "M", "T", 0L, 0, 0L).toFrame();
-        byte[] legacy = RecordWriter.logEntrySimple(null, "M", "T", 0L, 0, 0L);
-        assertArrayEquals(legacy, typed);
-    }
-
-    @Test
-    void methodEndRecord_matchesRecordWriterFrame() {
-        byte[] typed = new MethodEndRecord(
-                "S", "T", 0x0102030405060708L, 0x1112131415161718L
-        ).toFrame();
-        byte[] legacy = RecordWriter.methodEnd("S", "T", 0x0102030405060708L, 0x1112131415161718L);
-        assertArrayEquals(legacy, typed);
-    }
-
-    @Test
-    void methodEndRecord_nullSessionIdMatchesLegacy() {
-        byte[] typed = new MethodEndRecord(null, "T", 0L, 0L).toFrame();
-        byte[] legacy = RecordWriter.methodEnd(null, "T", 0L, 0L);
-        assertArrayEquals(legacy, typed);
-    }
-
-    @Test
-    void argumentsRecord_matchesRecordWriterFrame() {
-        byte[] cbor = {(byte) 0xCA, (byte) 0xFE, (byte) 0xBA, (byte) 0xBE};
-        assertArrayEquals(RecordWriter.arguments(cbor), new ArgumentsRecord(cbor).toFrame());
-    }
-
-    @Test
-    void argumentsExitRecord_matchesRecordWriterFrame() {
-        byte[] cbor = {(byte) 0xCA, (byte) 0xFE, (byte) 0xBA, (byte) 0xBE};
-        assertArrayEquals(RecordWriter.argumentsExit(cbor), new ArgumentsExitRecord(cbor).toFrame());
-    }
-
-    @Test
-    void thisInstanceRecord_matchesRecordWriterFrame() {
-        byte[] cbor = {(byte) 0xDE, (byte) 0xAD, (byte) 0xBE, (byte) 0xEF};
-        assertArrayEquals(RecordWriter.thisInstance(cbor), new ThisInstanceRecord(cbor).toFrame());
-    }
-
-    @Test
-    void thisInstanceRefRecord_matchesRecordWriterFrame() {
-        long objectId = 0x123456789ABCDEF0L;
-        assertArrayEquals(RecordWriter.thisInstanceRef(objectId),
-                new ThisInstanceRefRecord(objectId).toFrame());
-    }
-
-    @Test
-    void returnValueRecord_matchesRecordWriterFrame() {
-        byte[] cbor = {(byte) 0xDE, (byte) 0xAD, (byte) 0xBE, (byte) 0xEF};
-        assertArrayEquals(RecordWriter.returnValue(cbor), new ReturnRecord(cbor).toFrame());
-    }
-
-    @Test
-    void returnVoidRecord_matchesRecordWriterFrame() {
-        assertArrayEquals(RecordWriter.returnVoid(), ReturnRecord.ofVoid().toFrame());
-    }
-
-    @Test
-    void exceptionRecord_matchesRecordWriterFrame() {
-        byte[] cbor = {(byte) 0xBA, (byte) 0xDB, (byte) 0xAD, (byte) 0xBA};
-        assertArrayEquals(RecordWriter.exception(cbor), new ExceptionRecord(cbor).toFrame());
-    }
 
     // ============================================================
     //  Round-trip via TraceRecord.parse(typeByte, payload)
@@ -177,27 +90,22 @@ class TypedRecordTest {
     void cborWrappingRecords_roundTripPayloadAsIs() {
         byte[] cbor = {0x01, 0x02, 0x03, 0x04};
 
-        // ArgumentsRecord
         TraceRecord ar = TraceRecord.parse(ArgumentsRecord.TYPE, cbor);
         assertInstanceOf(ArgumentsRecord.class, ar);
         assertArrayEquals(cbor, ar.payloadBytes());
 
-        // ArgumentsExitRecord
         TraceRecord ax = TraceRecord.parse(ArgumentsExitRecord.TYPE, cbor);
         assertInstanceOf(ArgumentsExitRecord.class, ax);
         assertArrayEquals(cbor, ax.payloadBytes());
 
-        // ThisInstanceRecord
         TraceRecord ti = TraceRecord.parse(ThisInstanceRecord.TYPE, cbor);
         assertInstanceOf(ThisInstanceRecord.class, ti);
         assertArrayEquals(cbor, ti.payloadBytes());
 
-        // ExceptionRecord
         TraceRecord ex = TraceRecord.parse(ExceptionRecord.TYPE, cbor);
         assertInstanceOf(ExceptionRecord.class, ex);
         assertArrayEquals(cbor, ex.payloadBytes());
 
-        // ReturnRecord (value)
         TraceRecord rv = TraceRecord.parse(ReturnRecord.TYPE, cbor);
         ReturnRecord rvCast = assertInstanceOf(ReturnRecord.class, rv);
         assertFalse(rvCast.isVoid());
