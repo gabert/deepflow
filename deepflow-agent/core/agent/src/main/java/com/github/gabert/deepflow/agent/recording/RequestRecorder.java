@@ -33,7 +33,7 @@ public class RequestRecorder {
     private final boolean serializeValues;
     private final boolean emitTi;
     private final boolean emitAr;
-    private final boolean emitRt;
+    private final boolean emitReturnRecord;
     private final boolean emitAx;
 
     public RequestRecorder(RecordBuffer recordBuffer, AgentConfig config) {
@@ -44,7 +44,10 @@ public class RequestRecorder {
         this.serializeValues = config.isSerializeValues();
         this.emitTi = config.shouldEmit("TI");
         this.emitAr = config.shouldEmit("AR");
-        this.emitRt = config.shouldEmit("RT") || config.shouldEmit("RE");
+        // RT and RE are written as a single byte-record (RT is the record-type
+        // byte, RE is the optional payload). The renderer trims to whichever
+        // tags are configured, so we only need to know whether either is wanted.
+        this.emitReturnRecord = config.shouldEmit("RT") || config.shouldEmit("RE");
         this.emitAx = config.shouldEmit("AX");
     }
 
@@ -61,8 +64,12 @@ public class RequestRecorder {
             String signature = MethodSignatureFormatter.format(method);
             String threadName = Thread.currentThread().getName();
             long timestamp = System.nanoTime();
+            // Stack at this point: [recordEntry, target_method, caller_of_target, ...]
+            // ByteBuddy inlines onEnter into target_method's bytecode, so the call
+            // to recordEntry lives there at runtime. skip(2) walks past both frames
+            // and lands on the actual caller of the traced method.
             int callerLine = STACK_WALKER
-                    .walk(s -> s.skip(1).findFirst())
+                    .walk(s -> s.skip(2).findFirst())
                     .map(StackWalker.StackFrame::getLineNumber)
                     .orElse(0);
 
@@ -105,7 +112,7 @@ public class RequestRecorder {
                 byte[] exitArgsCbor = (emitAx && emitAr) ? valueEncoder.encode(allArguments) : null;
 
                 byte[] returnRecord;
-                if (!emitRt) {
+                if (!emitReturnRecord) {
                     returnRecord = RecordWriter.returnVoid();
                 } else if (throwable != null) {
                     returnRecord = RecordWriter.exception(valueEncoder.encode(buildExceptionData(throwable)));

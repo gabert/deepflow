@@ -1,6 +1,7 @@
 package com.github.gabert.deepflow.test.plain;
 
 import com.github.gabert.deepflow.test.common.AgentProcess;
+import com.github.gabert.deepflow.test.common.TraceBlock;
 import com.github.gabert.deepflow.test.common.TraceData;
 import com.github.gabert.deepflow.test.common.TraceFileParser;
 import org.junit.jupiter.api.BeforeAll;
@@ -159,6 +160,34 @@ class ExecutorPropagationIT {
                 "independentRoot1 should run on indie-thread, got: " + t1);
         assertTrue(t2.stream().anyMatch(t -> t.contains("indie-thread")),
                 "independentRoot2 should run on indie-thread, got: " + t2);
+    }
+
+    // ==================== Caller line ====================
+
+    @Test
+    void callerLine_capturesActualCallerNotTargetBody() {
+        long ri1 = singleRiFor("Scenarios.independentRoot1");
+        long ri2 = singleRiFor("Scenarios.independentRoot2");
+
+        String cl1 = workDoWorkBlock(ri1).tags().get("CL");
+        String cl2 = workDoWorkBlock(ri2).tags().get("CL");
+
+        // independentRoot1 and independentRoot2 each call work.doWork(...) at
+        // different source lines. If CL were the target's body line, both
+        // would report the same value (Work.doWork's first body line). They
+        // differ when CL captures the caller's line, which is the contract.
+        assertNotEquals(cl1, cl2,
+                "CL should reflect the call site, not the target method body. "
+                        + "Both reported " + cl1);
+    }
+
+    private TraceBlock workDoWorkBlock(long ri) {
+        return traces.entries().stream()
+                .filter(b -> b.requestId() == ri)
+                .filter(b -> b.method() != null && b.method().contains("Work.doWork"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "No Work.doWork entry block for RI=" + ri));
     }
 
     // ==================== Helpers ====================
