@@ -1,12 +1,12 @@
 package com.github.gabert.deepflow.recorder;
 
-import com.github.gabert.deepflow.recorder.record.MethodEndData;
-import com.github.gabert.deepflow.recorder.record.MethodStartData;
-import com.github.gabert.deepflow.recorder.record.BinaryUtil;
-import com.github.gabert.deepflow.recorder.record.RawFrame;
+import com.github.gabert.deepflow.recorder.record.MethodEndRecord;
+import com.github.gabert.deepflow.recorder.record.MethodStartRecord;
 import com.github.gabert.deepflow.recorder.record.RecordReader;
 import com.github.gabert.deepflow.recorder.record.RecordType;
 import com.github.gabert.deepflow.recorder.record.RecordWriter;
+import com.github.gabert.deepflow.recorder.record.ThisInstanceRefRecord;
+import com.github.gabert.deepflow.recorder.record.TraceRecord;
 import org.junit.jupiter.api.Test;
 
 import java.util.HexFormat;
@@ -14,6 +14,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
@@ -262,17 +263,16 @@ class WireFormatGoldenTest {
                 "session", "sig", "thread",
                 0x1122334455667788L, 42, 0x99AABBCCDDEEFF00L);
 
-        List<RawFrame> records = RecordReader.readAll(bytes);
+        List<TraceRecord> records = RecordReader.readAll(bytes);
         assertEquals(1, records.size());
-        assertEquals(RecordType.METHOD_START, records.get(0).type());
 
-        MethodStartData parsed = RecordReader.decodeMethodStart(records.get(0));
-        assertEquals("session", parsed.sessionId);
-        assertEquals("sig", parsed.signature);
-        assertEquals("thread", parsed.threadName);
-        assertEquals(0x1122334455667788L, parsed.timestamp);
-        assertEquals(42, parsed.callerLine);
-        assertEquals(0x99AABBCCDDEEFF00L, parsed.requestId);
+        MethodStartRecord parsed = assertInstanceOf(MethodStartRecord.class, records.get(0));
+        assertEquals("session", parsed.sessionId());
+        assertEquals("sig", parsed.signature());
+        assertEquals("thread", parsed.threadName());
+        assertEquals(0x1122334455667788L, parsed.timestamp());
+        assertEquals(42, parsed.callerLine());
+        assertEquals(0x99AABBCCDDEEFF00L, parsed.requestId());
     }
 
     @Test
@@ -280,15 +280,14 @@ class WireFormatGoldenTest {
         byte[] bytes = RecordWriter.methodEnd(
                 "session", "thread", 0x1122334455667788L, 0x99AABBCCDDEEFF00L);
 
-        List<RawFrame> records = RecordReader.readAll(bytes);
+        List<TraceRecord> records = RecordReader.readAll(bytes);
         assertEquals(1, records.size());
-        assertEquals(RecordType.METHOD_END, records.get(0).type());
 
-        MethodEndData parsed = RecordReader.decodeMethodEnd(records.get(0));
-        assertEquals("session", parsed.sessionId);
-        assertEquals("thread", parsed.threadName);
-        assertEquals(0x1122334455667788L, parsed.timestamp);
-        assertEquals(0x99AABBCCDDEEFF00L, parsed.requestId);
+        MethodEndRecord parsed = assertInstanceOf(MethodEndRecord.class, records.get(0));
+        assertEquals("session", parsed.sessionId());
+        assertEquals("thread", parsed.threadName());
+        assertEquals(0x1122334455667788L, parsed.timestamp());
+        assertEquals(0x99AABBCCDDEEFF00L, parsed.requestId());
     }
 
     @Test
@@ -296,18 +295,19 @@ class WireFormatGoldenTest {
         byte[] bytes = RecordWriter.logEntrySimple(
                 null, "sig", "thread", 0L, 0, 0L);
 
-        MethodStartData parsed = RecordReader.decodeMethodStart(
+        MethodStartRecord parsed = assertInstanceOf(MethodStartRecord.class,
                 RecordReader.readAll(bytes).get(0));
-        assertNull(parsed.sessionId);
+        assertNull(parsed.sessionId());
     }
 
     @Test
     void thisInstanceRef_parsesBackToSameId() {
         byte[] bytes = RecordWriter.thisInstanceRef(0x123456789ABCDEF0L);
 
-        List<RawFrame> records = RecordReader.readAll(bytes);
+        List<TraceRecord> records = RecordReader.readAll(bytes);
         assertEquals(1, records.size());
-        assertEquals(RecordType.THIS_INSTANCE_REF, records.get(0).type());
-        assertEquals(0x123456789ABCDEF0L, BinaryUtil.getLong(records.get(0).payload(), 0));
+
+        ThisInstanceRefRecord parsed = assertInstanceOf(ThisInstanceRefRecord.class, records.get(0));
+        assertEquals(0x123456789ABCDEF0L, parsed.objectId());
     }
 }

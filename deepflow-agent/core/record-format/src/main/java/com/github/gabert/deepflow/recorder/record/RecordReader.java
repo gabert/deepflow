@@ -2,19 +2,24 @@ package com.github.gabert.deepflow.recorder.record;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Parses a stream of binary frames into {@link TraceRecord}s.
+ *
+ * <p>The frame loop is the only place that reads the 5-byte header
+ * ({@code [type:1][payloadLen:4]}); type-specific decoding is delegated to
+ * the per-record {@code parse(payload)} static methods via
+ * {@link TraceRecord#parse(byte, byte[])}.</p>
+ */
 public final class RecordReader {
 
     private RecordReader() {}
 
-    // --- Public API ---
-
-    public static List<RawFrame> readAll(byte[] data) {
-        List<RawFrame> records = new ArrayList<>();
+    public static List<TraceRecord> readAll(byte[] data) {
+        List<TraceRecord> records = new ArrayList<>();
         int pos = 0;
         while (pos + RecordType.HEADER_SIZE <= data.length) {
             byte type = data[pos];
@@ -35,57 +40,13 @@ public final class RecordReader {
             }
 
             byte[] payload = Arrays.copyOfRange(data, pos, pos + length);
-            records.add(new RawFrame(type, payload));
+            records.add(TraceRecord.parse(type, payload));
             pos += length;
         }
         return records;
     }
 
-    public static List<RawFrame> readAll(InputStream in) throws IOException {
+    public static List<TraceRecord> readAll(InputStream in) throws IOException {
         return readAll(in.readAllBytes());
-    }
-
-    public static MethodStartData decodeMethodStart(RawFrame record) {
-        byte[] payload = record.payload();
-        int pos = 0;
-        int sessionIdLen = BinaryUtil.getShort(payload, pos);
-        pos += RecordType.SESSION_ID_LENGTH_SIZE;
-        String sessionId = sessionIdLen > 0
-                ? new String(payload, pos, sessionIdLen, StandardCharsets.UTF_8)
-                : null;
-        pos += sessionIdLen;
-        int sigLen = BinaryUtil.getShort(payload, pos);
-        pos += RecordType.SIGNATURE_LENGTH_SIZE;
-        String signature = new String(payload, pos, sigLen, StandardCharsets.UTF_8);
-        pos += sigLen;
-        int threadLen = BinaryUtil.getShort(payload, pos);
-        pos += RecordType.THREAD_NAME_LENGTH_SIZE;
-        String threadName = new String(payload, pos, threadLen, StandardCharsets.UTF_8);
-        pos += threadLen;
-        long timestamp = BinaryUtil.getLong(payload, pos);
-        pos += RecordType.TIMESTAMP_SIZE;
-        int callerLine = BinaryUtil.getInt(payload, pos);
-        pos += RecordType.CALLER_LINE_SIZE;
-        long requestId = BinaryUtil.getLong(payload, pos);
-        return new MethodStartData(sessionId, signature, threadName, timestamp, callerLine, requestId);
-    }
-
-    public static MethodEndData decodeMethodEnd(RawFrame record) {
-        byte[] payload = record.payload();
-        int pos = 0;
-        int sessionIdLen = BinaryUtil.getShort(payload, pos);
-        pos += RecordType.SESSION_ID_LENGTH_SIZE;
-        String sessionId = sessionIdLen > 0
-                ? new String(payload, pos, sessionIdLen, StandardCharsets.UTF_8)
-                : null;
-        pos += sessionIdLen;
-        int threadLen = BinaryUtil.getShort(payload, pos);
-        pos += RecordType.THREAD_NAME_LENGTH_SIZE;
-        String threadName = new String(payload, pos, threadLen, StandardCharsets.UTF_8);
-        pos += threadLen;
-        long timestamp = BinaryUtil.getLong(payload, pos);
-        pos += RecordType.TIMESTAMP_SIZE;
-        long requestId = BinaryUtil.getLong(payload, pos);
-        return new MethodEndData(sessionId, timestamp, threadName, requestId);
     }
 }

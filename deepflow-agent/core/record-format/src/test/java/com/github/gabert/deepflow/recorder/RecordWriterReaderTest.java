@@ -1,7 +1,14 @@
 package com.github.gabert.deepflow.recorder;
 
 import com.github.gabert.deepflow.codec.Codec;
-import com.github.gabert.deepflow.recorder.record.*;
+import com.github.gabert.deepflow.recorder.record.ArgumentsRecord;
+import com.github.gabert.deepflow.recorder.record.ExceptionRecord;
+import com.github.gabert.deepflow.recorder.record.MethodEndRecord;
+import com.github.gabert.deepflow.recorder.record.MethodStartRecord;
+import com.github.gabert.deepflow.recorder.record.RecordReader;
+import com.github.gabert.deepflow.recorder.record.RecordWriter;
+import com.github.gabert.deepflow.recorder.record.ReturnRecord;
+import com.github.gabert.deepflow.recorder.record.TraceRecord;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -26,19 +33,18 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logEntry(SESSION, SIGNATURE, THREAD, ts, 99, 0L, null, argsCbor);
 
-        List<RawFrame> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
-        assertEquals(RecordType.METHOD_START, records.get(0).type());
-        assertEquals(RecordType.ARGUMENTS, records.get(1).type());
 
-        MethodStartData meta = RecordReader.decodeMethodStart(records.get(0));
-        assertEquals(SESSION, meta.sessionId);
-        assertEquals(SIGNATURE, meta.signature);
-        assertEquals(THREAD, meta.threadName);
-        assertEquals(ts, meta.timestamp);
-        assertEquals(99, meta.callerLine);
+        MethodStartRecord meta = assertInstanceOf(MethodStartRecord.class, records.get(0));
+        assertEquals(SESSION, meta.sessionId());
+        assertEquals(SIGNATURE, meta.signature());
+        assertEquals(THREAD, meta.threadName());
+        assertEquals(ts, meta.timestamp());
+        assertEquals(99, meta.callerLine());
 
-        assertArrayEquals(argsCbor, records.get(1).payload());
+        ArgumentsRecord args = assertInstanceOf(ArgumentsRecord.class, records.get(1));
+        assertArrayEquals(argsCbor, args.cbor());
     }
 
     @Test
@@ -48,10 +54,10 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logEntry(null, SIGNATURE, THREAD, ts, 10, 0L, null, argsCbor);
 
-        List<RawFrame> records = RecordReader.readAll(data);
-        MethodStartData meta = RecordReader.decodeMethodStart(records.get(0));
-        assertNull(meta.sessionId);
-        assertEquals(SIGNATURE, meta.signature);
+        List<TraceRecord> records = RecordReader.readAll(data);
+        MethodStartRecord meta = assertInstanceOf(MethodStartRecord.class, records.get(0));
+        assertNull(meta.sessionId());
+        assertEquals(SIGNATURE, meta.signature());
     }
 
     // --- logExit (value) ---
@@ -63,18 +69,18 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logExit(SESSION, THREAD, ts, 5L, retCbor, false);
 
-        List<RawFrame> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
-        assertEquals(RecordType.METHOD_END, records.get(0).type());
-        assertEquals(RecordType.RETURN, records.get(1).type());
 
-        assertArrayEquals(retCbor, records.get(1).payload());
+        MethodEndRecord meta = assertInstanceOf(MethodEndRecord.class, records.get(0));
+        assertEquals(SESSION, meta.sessionId());
+        assertEquals(ts, meta.timestamp());
+        assertEquals(THREAD, meta.threadName());
+        assertEquals(5L, meta.requestId());
 
-        MethodEndData meta = RecordReader.decodeMethodEnd(records.get(0));
-        assertEquals(SESSION, meta.sessionId);
-        assertEquals(ts, meta.timestamp);
-        assertEquals(THREAD, meta.threadName);
-        assertEquals(5L, meta.requestId);
+        ReturnRecord ret = assertInstanceOf(ReturnRecord.class, records.get(1));
+        assertFalse(ret.isVoid());
+        assertArrayEquals(retCbor, ret.cbor());
     }
 
     // --- logExit (void) ---
@@ -85,14 +91,15 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logExit(SESSION, THREAD, ts, 0L, null, true);
 
-        List<RawFrame> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
-        assertEquals(RecordType.METHOD_END, records.get(0).type());
-        assertEquals(RecordType.RETURN, records.get(1).type());
-        assertEquals(0, records.get(1).payload().length);
 
-        MethodEndData meta = RecordReader.decodeMethodEnd(records.get(0));
-        assertEquals(SESSION, meta.sessionId);
+        MethodEndRecord meta = assertInstanceOf(MethodEndRecord.class, records.get(0));
+        assertEquals(SESSION, meta.sessionId());
+
+        ReturnRecord ret = assertInstanceOf(ReturnRecord.class, records.get(1));
+        assertTrue(ret.isVoid());
+        assertEquals(0, ret.payloadBytes().length);
     }
 
     @Test
@@ -102,9 +109,10 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logExit(null, THREAD, ts, 0L, retCbor, false);
 
-        MethodEndData meta = RecordReader.decodeMethodEnd(RecordReader.readAll(data).get(0));
-        assertNull(meta.sessionId);
-        assertEquals(THREAD, meta.threadName);
+        MethodEndRecord meta = assertInstanceOf(MethodEndRecord.class,
+                RecordReader.readAll(data).get(0));
+        assertNull(meta.sessionId());
+        assertEquals(THREAD, meta.threadName());
     }
 
     // --- logExitException ---
@@ -116,17 +124,16 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logExitException(SESSION, THREAD, ts, 0L, excCbor);
 
-        List<RawFrame> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
-        assertEquals(RecordType.METHOD_END, records.get(0).type());
-        assertEquals(RecordType.EXCEPTION, records.get(1).type());
 
-        assertArrayEquals(excCbor, records.get(1).payload());
+        MethodEndRecord meta = assertInstanceOf(MethodEndRecord.class, records.get(0));
+        assertEquals(SESSION, meta.sessionId());
+        assertEquals(ts, meta.timestamp());
+        assertEquals(THREAD, meta.threadName());
 
-        MethodEndData meta = RecordReader.decodeMethodEnd(records.get(0));
-        assertEquals(SESSION, meta.sessionId);
-        assertEquals(ts, meta.timestamp);
-        assertEquals(THREAD, meta.threadName);
+        ExceptionRecord exc = assertInstanceOf(ExceptionRecord.class, records.get(1));
+        assertArrayEquals(excCbor, exc.cbor());
     }
 
     // --- Full method trace ---
@@ -143,21 +150,20 @@ class RecordWriterReaderTest {
 
         byte[] stream = concat(entry, exit);
 
-        List<RawFrame> records = RecordReader.readAll(stream);
+        List<TraceRecord> records = RecordReader.readAll(stream);
         assertEquals(4, records.size());
-        assertEquals(RecordType.METHOD_START, records.get(0).type());
-        assertEquals(RecordType.ARGUMENTS, records.get(1).type());
-        assertEquals(RecordType.METHOD_END, records.get(2).type());
-        assertEquals(RecordType.RETURN, records.get(3).type());
 
-        MethodStartData startMeta = RecordReader.decodeMethodStart(records.get(0));
-        MethodEndData endMeta = RecordReader.decodeMethodEnd(records.get(2));
-        assertEquals(SESSION, startMeta.sessionId);
-        assertEquals(SESSION, endMeta.sessionId);
-        assertEquals(tsStart, startMeta.timestamp);
-        assertEquals(tsEnd, endMeta.timestamp);
-        assertEquals(THREAD, endMeta.threadName);
-        assertEquals(0L, endMeta.requestId);
+        MethodStartRecord startMeta = assertInstanceOf(MethodStartRecord.class, records.get(0));
+        assertInstanceOf(ArgumentsRecord.class, records.get(1));
+        MethodEndRecord endMeta = assertInstanceOf(MethodEndRecord.class, records.get(2));
+        assertInstanceOf(ReturnRecord.class, records.get(3));
+
+        assertEquals(SESSION, startMeta.sessionId());
+        assertEquals(SESSION, endMeta.sessionId());
+        assertEquals(tsStart, startMeta.timestamp());
+        assertEquals(tsEnd, endMeta.timestamp());
+        assertEquals(THREAD, endMeta.threadName());
+        assertEquals(0L, endMeta.requestId());
     }
 
     @Test
@@ -172,20 +178,19 @@ class RecordWriterReaderTest {
 
         byte[] stream = concat(entry, exit);
 
-        List<RawFrame> records = RecordReader.readAll(stream);
+        List<TraceRecord> records = RecordReader.readAll(stream);
         assertEquals(4, records.size());
-        assertEquals(RecordType.METHOD_START, records.get(0).type());
-        assertEquals(RecordType.ARGUMENTS, records.get(1).type());
-        assertEquals(RecordType.METHOD_END, records.get(2).type());
-        assertEquals(RecordType.EXCEPTION, records.get(3).type());
 
-        MethodStartData startMeta = RecordReader.decodeMethodStart(records.get(0));
-        MethodEndData endMeta = RecordReader.decodeMethodEnd(records.get(2));
-        assertEquals(SESSION, startMeta.sessionId);
-        assertEquals(SESSION, endMeta.sessionId);
-        assertEquals(tsEnd, endMeta.timestamp);
-        assertEquals(THREAD, endMeta.threadName);
-        assertEquals(0L, endMeta.requestId);
+        MethodStartRecord startMeta = assertInstanceOf(MethodStartRecord.class, records.get(0));
+        assertInstanceOf(ArgumentsRecord.class, records.get(1));
+        MethodEndRecord endMeta = assertInstanceOf(MethodEndRecord.class, records.get(2));
+        assertInstanceOf(ExceptionRecord.class, records.get(3));
+
+        assertEquals(SESSION, startMeta.sessionId());
+        assertEquals(SESSION, endMeta.sessionId());
+        assertEquals(tsEnd, endMeta.timestamp());
+        assertEquals(THREAD, endMeta.threadName());
+        assertEquals(0L, endMeta.requestId());
     }
 
     @Test
@@ -207,53 +212,43 @@ class RecordWriterReaderTest {
 
         byte[] stream = concat(entryOuter, entryInner, exitInner, exitOuter);
 
-        List<RawFrame> records = RecordReader.readAll(stream);
+        List<TraceRecord> records = RecordReader.readAll(stream);
         assertEquals(8, records.size());
 
         // entry outer: METHOD_START + ARGUMENTS
-        assertEquals(RecordType.METHOD_START, records.get(0).type());
-        assertEquals(RecordType.ARGUMENTS, records.get(1).type());
+        MethodStartRecord outer = assertInstanceOf(MethodStartRecord.class, records.get(0));
+        assertInstanceOf(ArgumentsRecord.class, records.get(1));
         // entry inner: METHOD_START + ARGUMENTS
-        assertEquals(RecordType.METHOD_START, records.get(2).type());
-        assertEquals(RecordType.ARGUMENTS, records.get(3).type());
+        MethodStartRecord inner = assertInstanceOf(MethodStartRecord.class, records.get(2));
+        assertInstanceOf(ArgumentsRecord.class, records.get(3));
         // exit inner: METHOD_END + RETURN
-        assertEquals(RecordType.METHOD_END, records.get(4).type());
-        assertEquals(RecordType.RETURN, records.get(5).type());
+        MethodEndRecord innerEnd = assertInstanceOf(MethodEndRecord.class, records.get(4));
+        ReturnRecord innerRetRecord = assertInstanceOf(ReturnRecord.class, records.get(5));
         // exit outer: METHOD_END + RETURN (void)
-        assertEquals(RecordType.METHOD_END, records.get(6).type());
-        assertEquals(RecordType.RETURN, records.get(7).type());
+        MethodEndRecord outerEnd = assertInstanceOf(MethodEndRecord.class, records.get(6));
+        ReturnRecord outerRetRecord = assertInstanceOf(ReturnRecord.class, records.get(7));
 
-        // Verify session ID on all start/end frames
-        assertEquals(SESSION, RecordReader.decodeMethodStart(records.get(0)).sessionId);
-        assertEquals(SESSION, RecordReader.decodeMethodStart(records.get(2)).sessionId);
-        assertEquals(SESSION, RecordReader.decodeMethodEnd(records.get(4)).sessionId);
-        assertEquals(SESSION, RecordReader.decodeMethodEnd(records.get(6)).sessionId);
+        // Session ID on all start/end frames
+        assertEquals(SESSION, outer.sessionId());
+        assertEquals(SESSION, inner.sessionId());
+        assertEquals(SESSION, innerEnd.sessionId());
+        assertEquals(SESSION, outerEnd.sessionId());
 
-        // Verify signatures and thread names
-        MethodStartData outer = RecordReader.decodeMethodStart(records.get(0));
-        MethodStartData inner = RecordReader.decodeMethodStart(records.get(2));
-        assertEquals(sigOuter, outer.signature);
-        assertEquals(sigInner, inner.signature);
-        assertEquals("http-handler-1", outer.threadName);
-        assertEquals("http-handler-1", inner.threadName);
-
-        // Verify call IDs
-        assertEquals(0L, outer.requestId);
-        assertEquals(1L, inner.requestId);
-
-        // Verify timestamps
-        assertEquals(ts1, outer.timestamp);
-        assertEquals(ts2, inner.timestamp);
-        assertEquals(ts3, RecordReader.decodeMethodEnd(records.get(4)).timestamp);
-        assertEquals(ts4, RecordReader.decodeMethodEnd(records.get(6)).timestamp);
-
-        // Verify thread name in METHOD_END
-        assertEquals("http-handler-1", RecordReader.decodeMethodEnd(records.get(4)).threadName);
-        assertEquals("http-handler-1", RecordReader.decodeMethodEnd(records.get(6)).threadName);
+        // Signatures, threads, request IDs, timestamps
+        assertEquals(sigOuter, outer.signature());
+        assertEquals(sigInner, inner.signature());
+        assertEquals("http-handler-1", outer.threadName());
+        assertEquals("http-handler-1", inner.threadName());
+        assertEquals(0L, outer.requestId());
+        assertEquals(1L, inner.requestId());
+        assertEquals(ts1, outer.timestamp());
+        assertEquals(ts2, inner.timestamp());
+        assertEquals(ts3, innerEnd.timestamp());
+        assertEquals(ts4, outerEnd.timestamp());
 
         // Inner return has payload, outer return is void
-        assertTrue(records.get(5).payload().length > 0);
-        assertEquals(0, records.get(7).payload().length);
+        assertFalse(innerRetRecord.isVoid());
+        assertTrue(outerRetRecord.isVoid());
     }
 
     // --- RecordReader edge cases ---
@@ -262,14 +257,14 @@ class RecordWriterReaderTest {
     void readAllFromInputStream() throws Exception {
         byte[] data = RecordWriter.logEntry(null, SIGNATURE, THREAD, 1000L, 1, 0L, null, Codec.encode(new Object[]{}));
 
-        List<RawFrame> records = RecordReader.readAll(new ByteArrayInputStream(data));
+        List<TraceRecord> records = RecordReader.readAll(new ByteArrayInputStream(data));
         assertEquals(2, records.size());
-        assertEquals(RecordType.METHOD_START, records.get(0).type());
+        assertInstanceOf(MethodStartRecord.class, records.get(0));
     }
 
     @Test
     void emptyInputReturnsEmptyList() {
-        List<RawFrame> records = RecordReader.readAll(new byte[0]);
+        List<TraceRecord> records = RecordReader.readAll(new byte[0]);
         assertTrue(records.isEmpty());
     }
 
@@ -287,9 +282,10 @@ class RecordWriterReaderTest {
 
         byte[] data = RecordWriter.logEntry(null, SIGNATURE, THREAD, 1000L, 1, 0L, null, bigArgs);
 
-        List<RawFrame> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         assertEquals(2, records.size());
-        assertArrayEquals(bigArgs, records.get(1).payload());
+        ArgumentsRecord args = assertInstanceOf(ArgumentsRecord.class, records.get(1));
+        assertArrayEquals(bigArgs, args.cbor());
     }
 
     // --- Test utilities ---

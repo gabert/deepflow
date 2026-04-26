@@ -1,30 +1,41 @@
-
 package com.github.gabert.deepflow.recorder.destination;
 
 import com.github.gabert.deepflow.codec.Codec;
 import com.github.gabert.deepflow.codec.envelope.FieldIds;
-import com.github.gabert.deepflow.recorder.record.MethodEndData;
-import com.github.gabert.deepflow.recorder.record.MethodStartData;
-import com.github.gabert.deepflow.recorder.record.BinaryUtil;
+import com.github.gabert.deepflow.recorder.record.ArgumentsExitRecord;
+import com.github.gabert.deepflow.recorder.record.ArgumentsRecord;
+import com.github.gabert.deepflow.recorder.record.ExceptionRecord;
+import com.github.gabert.deepflow.recorder.record.MethodEndRecord;
+import com.github.gabert.deepflow.recorder.record.MethodStartRecord;
 import com.github.gabert.deepflow.recorder.record.RecordReader;
-import com.github.gabert.deepflow.recorder.record.RecordType;
+import com.github.gabert.deepflow.recorder.record.ReturnRecord;
+import com.github.gabert.deepflow.recorder.record.ThisInstanceRecord;
+import com.github.gabert.deepflow.recorder.record.ThisInstanceRefRecord;
+import com.github.gabert.deepflow.recorder.record.TraceRecord;
+import com.github.gabert.deepflow.recorder.record.VersionRecord;
 
 import java.io.IOException;
-
-import com.github.gabert.deepflow.recorder.record.RawFrame;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 
+/**
+ * Decodes a binary record stream and renders it as semicolon-delimited
+ * {@code TAG;value} lines, filtered by a configured {@code emit_tags} set.
+ *
+ * <p>Type-specific tag emission lives next to each {@link TraceRecord}
+ * implementation conceptually — but Java 17 doesn't yet have standard
+ * pattern-matching switches over sealed types, so the dispatch is an
+ * {@code instanceof} chain in {@link #tagsFor(TraceRecord)}. Adding a new
+ * record type means: add the class to {@code TraceRecord.permits}, add a
+ * {@code case} in {@code TraceRecord.parse}, and add an {@code instanceof}
+ * branch here.</p>
+ */
 public final class RecordRenderer {
     private static final String DELIMITER = ";";
     private static final Set<String> ALL_TAGS = Set.of(
             "VR", "MS", "SI", "TN", "RI", "TS", "CL", "TI", "AR", "AX", "RT", "RE", "TE");
-
-    private static final Map<Byte, Function<RawFrame, List<TagEntry>>> HANDLERS = buildHandlers();
 
     private RecordRenderer() {}
 
@@ -35,15 +46,12 @@ public final class RecordRenderer {
     }
 
     public static Result render(byte[] data, Set<String> emitTags) {
-        List<RawFrame> records = RecordReader.readAll(data);
+        List<TraceRecord> records = RecordReader.readAll(data);
         List<String> lines = new ArrayList<>();
         String threadName = null;
 
-        for (RawFrame record : records) {
-            Function<RawFrame, List<TagEntry>> handler = HANDLERS.get(record.type());
-            if (handler == null) continue;
-
-            for (TagEntry entry : handler.apply(record)) {
+        for (TraceRecord record : records) {
+            for (TagEntry entry : tagsFor(record)) {
                 if (entry.threadName() != null) {
                     threadName = entry.threadName();
                 }
@@ -56,65 +64,60 @@ public final class RecordRenderer {
         return new Result(threadName, lines);
     }
 
-    // --- Handler registry ---
+    // --- Per-type tag rendering ---
 
-    private static Map<Byte, Function<RawFrame, List<TagEntry>>> buildHandlers() {
-        Map<Byte, Function<RawFrame, List<TagEntry>>> map = new HashMap<>();
+    private static List<TagEntry> tagsFor(TraceRecord record) {
+        if (record instanceof VersionRecord v) {
+            return List.of(tag("VR", v.major() + "." + v.minor()));
+        }
+        if (record instanceof MethodStartRecord m) {
+            return tagsForMethodStart(m);
+        }
+        if (record instanceof MethodEndRecord m) {
+            return tagsForMethodEnd(m);
+        }
+        if (record instanceof ThisInstanceRecord t) {
+            return List.of(tag("TI", decodeCbor(t.cbor())));
+        }
+        if (record instanceof ThisInstanceRefRecord t) {
+            return List.of(tag("TI", String.valueOf(t.objectId())));
+        }
+        if (record instanceof ArgumentsRecord a) {
+            return List.of(tag("AR", decodeArgumentsPayload(a.cbor())));
+        }
+        if (record instanceof ArgumentsExitRecord a) {
+            return List.of(tag("AX", decodeArgumentsPayload(a.cbor())));
+        }
+        if (record instanceof ReturnRecord r) {
+            return r.isVoid()
+                    ? List.of(tag("RT", "VOID"))
+                    : List.of(tag("RT", "VALUE"), tag("RE", decodeCbor(r.cbor())));
+        }
+        if (record instanceof ExceptionRecord e) {
+            return List.of(tag("RT", "EXCEPTION"), tag("RE", decodeCbor(e.cbor())));
+        }
+        // Sealed permits clause guarantees this is unreachable in correct code.
+        throw new IllegalStateException("Unhandled TraceRecord subtype: " + record.getClass());
+    }
 
-        map.put(RecordType.VERSION, record -> {
-            short major = (short) ((record.payload()[0] << 8) | (record.payload()[1] & 0xFF));
-            short minor = (short) ((record.payload()[2] << 8) | (record.payload()[3] & 0xFF));
-            return List.of(tag("VR", major + "." + minor));
-        });
+    private static List<TagEntry> tagsForMethodStart(MethodStartRecord m) {
+        List<TagEntry> entries = new ArrayList<>();
+        entries.add(tag("TS", String.valueOf(m.timestamp())));
+        if (m.sessionId() != null) entries.add(tag("SI", m.sessionId()));
+        entries.add(tag("MS", m.signature()));
+        entries.add(tag("TN", m.threadName()));
+        entries.add(tag("RI", String.valueOf(m.requestId())));
+        entries.add(tag("CL", String.valueOf(m.callerLine())));
+        entries.add(threadName(m.threadName()));
+        return entries;
+    }
 
-        map.put(RecordType.METHOD_START, record -> {
-            MethodStartData m = RecordReader.decodeMethodStart(record);
-            List<TagEntry> entries = new ArrayList<>();
-            entries.add(tag("TS", String.valueOf(m.timestamp)));
-            if (m.sessionId != null) entries.add(tag("SI", m.sessionId));
-            entries.add(tag("MS", m.signature));
-            entries.add(tag("TN", m.threadName));
-            entries.add(tag("RI", String.valueOf(m.requestId)));
-            entries.add(tag("CL", String.valueOf(m.callerLine)));
-            entries.add(threadName(m.threadName));
-            return entries;
-        });
-
-        map.put(RecordType.THIS_INSTANCE, record ->
-                List.of(tag("TI", decodeCborPayload(record.payload()))));
-
-        map.put(RecordType.THIS_INSTANCE_REF, record ->
-                List.of(tag("TI", String.valueOf(BinaryUtil.getLong(record.payload(), 0)))));
-
-        map.put(RecordType.ARGUMENTS, record ->
-                List.of(tag("AR", decodeArgumentsPayload(record.payload()))));
-
-        map.put(RecordType.ARGUMENTS_EXIT, record ->
-                List.of(tag("AX", decodeArgumentsPayload(record.payload()))));
-
-        map.put(RecordType.RETURN, record -> {
-            if (record.payload().length == 0) {
-                return List.of(tag("RT", "VOID"));
-            }
-            return List.of(
-                    tag("RT", "VALUE"),
-                    tag("RE", decodeCborPayload(record.payload())));
-        });
-
-        map.put(RecordType.EXCEPTION, record -> List.of(
-                tag("RT", "EXCEPTION"),
-                tag("RE", decodeCborPayload(record.payload()))));
-
-        map.put(RecordType.METHOD_END, record -> {
-            MethodEndData m = RecordReader.decodeMethodEnd(record);
-            return List.of(
-                    tag("TE", String.valueOf(m.timestamp)),
-                    tag("TN", m.threadName),
-                    tag("RI", String.valueOf(m.requestId)),
-                    threadName(m.threadName));
-        });
-
-        return Map.copyOf(map);
+    private static List<TagEntry> tagsForMethodEnd(MethodEndRecord m) {
+        return List.of(
+                tag("TE", String.valueOf(m.timestamp())),
+                tag("TN", m.threadName()),
+                tag("RI", String.valueOf(m.requestId())),
+                threadName(m.threadName()));
     }
 
     // --- TagEntry ---
@@ -129,7 +132,7 @@ public final class RecordRenderer {
         return new TagEntry("_threadName", "", name);
     }
 
-    // --- Decoders ---
+    // --- CBOR-payload decoders ---
 
     private static String decodeArgumentsPayload(byte[] payload) {
         try {
@@ -154,7 +157,7 @@ public final class RecordRenderer {
         return value;
     }
 
-    private static String decodeCborPayload(byte[] payload) {
+    private static String decodeCbor(byte[] payload) {
         try {
             Object decoded = Codec.decode(payload);
             return Codec.toReadableJson(decoded);
