@@ -6,6 +6,7 @@ import com.github.gabert.deepflow.recorder.destination.Destination;
 import com.github.gabert.deepflow.recorder.destination.RecordDrainer;
 import com.github.gabert.deepflow.recorder.destination.FileDestination;
 import com.github.gabert.deepflow.recorder.destination.HttpDestination;
+import com.github.gabert.deepflow.recorder.destination.TestDestination;
 
 import java.io.IOException;
 import java.util.Map;
@@ -54,6 +55,9 @@ public final class RecorderManager {
         }
         if ("http".equals(type)) {
             return new HttpDestination(config);
+        }
+        if ("test".equals(type)) {
+            return new TestDestination(config);
         }
         throw new IllegalArgumentException("Unknown destination type: " + type);
     }

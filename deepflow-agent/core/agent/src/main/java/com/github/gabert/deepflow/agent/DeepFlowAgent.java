@@ -8,10 +8,18 @@ import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.utility.JavaModule;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
+import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.jar.JarOutputStream;
 
 public class DeepFlowAgent {
     private static final String AGENT_PACKAGE = "com.github.gabert.deepflow.agent";
@@ -30,6 +38,13 @@ public class DeepFlowAgent {
             System.err.println("[DeepFlow] Failed to load agent config. Agent disabled.");
             e.printStackTrace();
             return;
+        }
+
+        // Inject bootstrap classes BEFORE DeepFlowAdvice or any executor advice
+        // classes are used, so that RequestContext is loaded from bootstrap (not
+        // system CL) when first referenced.
+        if (agentConfig.isPropagateRequestId()) {
+            injectBootstrapClasses(instrumentation);
         }
 
         System.out.println("[DeepFlow] Agent attached — destination=" + agentConfig.getDestination()
@@ -83,12 +98,67 @@ public class DeepFlowAgent {
         }
     }
 
+    private static void injectBootstrapClasses(Instrumentation instrumentation) {
+        // Build a small temp JAR with just the classes needed by executor advice
+        // when inlined into JDK classes (ThreadPoolExecutor, ForkJoinPool).
+        // We read class bytes as resources to avoid triggering class loading —
+        // if the system CL loaded them first, we'd get two copies and the
+        // ThreadLocals would be different.
+        String[] classResources = {
+                "com/github/gabert/deepflow/agent/RequestContext.class",
+                "com/github/gabert/deepflow/agent/PropagatingRunnable.class",
+                "com/github/gabert/deepflow/agent/PropagatingCallable.class"
+        };
+
+        try {
+            File tempJar = File.createTempFile("deepflow-bootstrap", ".jar");
+            tempJar.deleteOnExit();
+
+            try (JarOutputStream jos = new JarOutputStream(new FileOutputStream(tempJar))) {
+                ClassLoader cl = DeepFlowAgent.class.getClassLoader();
+                for (String resource : classResources) {
+                    try (InputStream is = cl.getResourceAsStream(resource)) {
+                        if (is == null) {
+                            throw new RuntimeException("Cannot find resource: " + resource);
+                        }
+                        jos.putNextEntry(new JarEntry(resource));
+                        is.transferTo(jos);
+                        jos.closeEntry();
+                    }
+                }
+            }
+
+            instrumentation.appendToBootstrapClassLoaderSearch(new JarFile(tempJar));
+
+            // After injection, add a module reads edge so java.base can access
+            // our bootstrap-injected classes (which land in the unnamed module).
+            Class<?> injectedClass = Class.forName(
+                    "com.github.gabert.deepflow.agent.RequestContext", true, null);
+            Module javaBase = Object.class.getModule();
+            Module unnamedBootstrap = injectedClass.getModule();
+            instrumentation.redefineModule(
+                    javaBase,
+                    Set.of(unnamedBootstrap),
+                    Map.of(),
+                    Map.of(),
+                    Set.of(),
+                    Map.of());
+        } catch (Exception e) {
+            System.err.println("[DeepFlow] Warning: failed to inject bootstrap classes. "
+                    + "Cross-thread request ID propagation may not work.");
+            e.printStackTrace();
+        }
+    }
+
     private static void installExecutorInstrumentation(Instrumentation instrumentation) {
         // ThreadPoolExecutor.execute(Runnable) — covers @Async, ExecutorService.submit(),
         // ScheduledThreadPoolExecutor (extends ThreadPoolExecutor)
+        // Override default ignore rules — AgentBuilder.Default ignores java.* classes,
+        // but we specifically need to retransform ThreadPoolExecutor and ForkJoinPool.
         new AgentBuilder.Default()
                 .disableClassFormatChanges()
                 .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                .ignore(ElementMatchers.none())
                 .type(ElementMatchers.is(ThreadPoolExecutor.class))
                 .transform((builder, type, loader, module, pd) -> builder.visit(
                         Advice.to(ExecutorAdvice.class)
@@ -96,11 +166,10 @@ public class DeepFlowAgent {
                                         .and(ElementMatchers.takesArgument(0, Runnable.class)))))
                 .installOn(instrumentation);
 
-        // ForkJoinPool.execute(Runnable) and submit(Runnable/Callable) — covers
-        // CompletableFuture.supplyAsync(), explicit ForkJoinPool usage
         new AgentBuilder.Default()
                 .disableClassFormatChanges()
                 .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                .ignore(ElementMatchers.none())
                 .type(ElementMatchers.is(ForkJoinPool.class))
                 .transform((builder, type, loader, module, pd) -> builder.visit(
                         Advice.to(ForkJoinAdvice.ExecuteRunnable.class)

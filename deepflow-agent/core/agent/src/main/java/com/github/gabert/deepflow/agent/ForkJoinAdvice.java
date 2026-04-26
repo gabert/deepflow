@@ -9,7 +9,7 @@ public class ForkJoinAdvice {
         public static void onEnter(
                 @Advice.Argument(value = 0, readOnly = false) Runnable runnable) {
 
-            long requestId = DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0];
+            long requestId = RequestContext.CURRENT_REQUEST_ID.get()[0];
             if (requestId != 0L) {
                 runnable = new PropagatingRunnable(runnable, requestId);
             }
@@ -21,7 +21,7 @@ public class ForkJoinAdvice {
         public static void onEnter(
                 @Advice.Argument(value = 0, readOnly = false) java.util.concurrent.Callable<?> callable) {
 
-            long requestId = DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0];
+            long requestId = RequestContext.CURRENT_REQUEST_ID.get()[0];
             if (requestId != 0L) {
                 callable = new PropagatingCallable<>(callable, requestId);
             }

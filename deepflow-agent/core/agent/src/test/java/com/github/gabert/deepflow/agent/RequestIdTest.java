@@ -14,16 +14,16 @@ class RequestIdTest {
 
     @BeforeEach
     void resetThreadLocals() {
-        DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0] = 0L;
-        DeepFlowAdvice.DEPTH.get()[0] = 0;
+        RequestContext.CURRENT_REQUEST_ID.get()[0] = 0L;
+        RequestContext.DEPTH.get()[0] = 0;
     }
 
     // --- Layer 1: depth-based request ID ---
 
     @Test
     void rootEntryGeneratesNewRequestId() {
-        int[] depth = DeepFlowAdvice.DEPTH.get();
-        long[] requestId = DeepFlowAdvice.CURRENT_REQUEST_ID.get();
+        int[] depth = RequestContext.DEPTH.get();
+        long[] requestId = RequestContext.CURRENT_REQUEST_ID.get();
 
         // Simulate recordEntry at depth 0
         assertEquals(0, depth[0]);
@@ -58,7 +58,7 @@ class RequestIdTest {
 
     @Test
     void depthNeverGoesBelowZero() {
-        int[] depth = DeepFlowAdvice.DEPTH.get();
+        int[] depth = RequestContext.DEPTH.get();
 
         assertEquals(0, depth[0]);
         simulateExit(depth); // extra exit
@@ -69,8 +69,8 @@ class RequestIdTest {
 
     @Test
     void threadPoolReuseGetsDifferentRequestIds() {
-        int[] depth = DeepFlowAdvice.DEPTH.get();
-        long[] requestId = DeepFlowAdvice.CURRENT_REQUEST_ID.get();
+        int[] depth = RequestContext.DEPTH.get();
+        long[] requestId = RequestContext.CURRENT_REQUEST_ID.get();
 
         // Request 1
         simulateEnter(depth, requestId);
@@ -99,8 +99,8 @@ class RequestIdTest {
 
     @Test
     void propagatingRunnableCarriesRequestId() throws Exception {
-        int[] depth = DeepFlowAdvice.DEPTH.get();
-        long[] requestId = DeepFlowAdvice.CURRENT_REQUEST_ID.get();
+        int[] depth = RequestContext.DEPTH.get();
+        long[] requestId = RequestContext.CURRENT_REQUEST_ID.get();
 
         // Simulate a request on the submitting thread
         simulateEnter(depth, requestId);
@@ -110,7 +110,7 @@ class RequestIdTest {
         CountDownLatch latch = new CountDownLatch(1);
 
         Runnable task = new PropagatingRunnable(() -> {
-            capturedId.set(DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0]);
+            capturedId.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
             latch.countDown();
         }, parentId);
 
@@ -126,8 +126,8 @@ class RequestIdTest {
 
     @Test
     void propagatingRunnableRestoresState() throws Exception {
-        int[] depth = DeepFlowAdvice.DEPTH.get();
-        long[] requestId = DeepFlowAdvice.CURRENT_REQUEST_ID.get();
+        int[] depth = RequestContext.DEPTH.get();
+        long[] requestId = RequestContext.CURRENT_REQUEST_ID.get();
 
         simulateEnter(depth, requestId);
         long parentId = requestId[0];
@@ -144,14 +144,14 @@ class RequestIdTest {
         // Run the propagating task, then check state is restored
         executor.execute(() -> {
             // Before: clean state
-            long priorId = DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0];
-            int priorDepth = DeepFlowAdvice.DEPTH.get()[0];
+            long priorId = RequestContext.CURRENT_REQUEST_ID.get()[0];
+            int priorDepth = RequestContext.DEPTH.get()[0];
 
             task.run();
 
             // After: state must be restored
-            depthAfter.set(DeepFlowAdvice.DEPTH.get()[0]);
-            idAfter.set(DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0]);
+            depthAfter.set(RequestContext.DEPTH.get()[0]);
+            idAfter.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
             assertEquals(priorDepth, depthAfter.get());
             assertEquals(priorId, idAfter.get());
             latch.countDown();
@@ -164,8 +164,8 @@ class RequestIdTest {
 
     @Test
     void propagatingRunnableRestoresOnException() throws Exception {
-        int[] depth = DeepFlowAdvice.DEPTH.get();
-        long[] requestId = DeepFlowAdvice.CURRENT_REQUEST_ID.get();
+        int[] depth = RequestContext.DEPTH.get();
+        long[] requestId = RequestContext.CURRENT_REQUEST_ID.get();
 
         simulateEnter(depth, requestId);
         long parentId = requestId[0];
@@ -183,7 +183,7 @@ class RequestIdTest {
                 task.run();
             } catch (RuntimeException ignored) {
             }
-            depthAfter.set(DeepFlowAdvice.DEPTH.get()[0]);
+            depthAfter.set(RequestContext.DEPTH.get()[0]);
             latch.countDown();
         });
         latch.await();

@@ -2,19 +2,19 @@ package com.github.gabert.deepflow.agent;
 
 import java.util.concurrent.Callable;
 
-class PropagatingCallable<V> implements Callable<V> {
+public class PropagatingCallable<V> implements Callable<V> {
     private final Callable<V> delegate;
     private final long parentRequestId;
 
-    PropagatingCallable(Callable<V> delegate, long parentRequestId) {
+    public PropagatingCallable(Callable<V> delegate, long parentRequestId) {
         this.delegate = delegate;
         this.parentRequestId = parentRequestId;
     }
 
     @Override
     public V call() throws Exception {
-        long[] requestIdHolder = DeepFlowAdvice.CURRENT_REQUEST_ID.get();
-        int[] depthHolder = DeepFlowAdvice.DEPTH.get();
+        long[] requestIdHolder = RequestContext.CURRENT_REQUEST_ID.get();
+        int[] depthHolder = RequestContext.DEPTH.get();
 
         long savedRequestId = requestIdHolder[0];
         int savedDepth = depthHolder[0];

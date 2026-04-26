@@ -44,8 +44,8 @@ class DeepFlowAdviceRecordingTest {
     @BeforeEach
     void setUp() throws Exception {
         buffer = new UnboundedRecordBuffer();
-        DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0] = 0L;
-        DeepFlowAdvice.DEPTH.get()[0] = 0;
+        RequestContext.CURRENT_REQUEST_ID.get()[0] = 0L;
+        RequestContext.DEPTH.get()[0] = 0;
         DeepFlowAdvice.RECORD_BUFFER = buffer;
 
         configureAdvice("serialize_values=true&expand_this=false");
@@ -60,8 +60,8 @@ class DeepFlowAdviceRecordingTest {
     @AfterEach
     void tearDown() throws Exception {
         DeepFlowAdvice.RECORD_BUFFER = null;
-        DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0] = 0L;
-        DeepFlowAdvice.DEPTH.get()[0] = 0;
+        RequestContext.CURRENT_REQUEST_ID.get()[0] = 0L;
+        RequestContext.DEPTH.get()[0] = 0;
         setField("SESSION_ID_RESOLVER", null);
     }
 
@@ -256,7 +256,7 @@ class DeepFlowAdviceRecordingTest {
     @Test
     void propagatedTaskSharesParentRequestId() throws Exception {
         DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
-        long parentRequestId = DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0];
+        long parentRequestId = RequestContext.CURRENT_REQUEST_ID.get()[0];
 
         CountDownLatch latch = new CountDownLatch(1);
         Runnable task = new PropagatingRunnable(() -> {
@@ -287,7 +287,7 @@ class DeepFlowAdviceRecordingTest {
     @Test
     void propagatedNestedCallsShareRequestId() throws Exception {
         DeepFlowAdvice.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
-        long parentRequestId = DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0];
+        long parentRequestId = RequestContext.CURRENT_REQUEST_ID.get()[0];
 
         CountDownLatch latch = new CountDownLatch(1);
         Runnable task = new PropagatingRunnable(() -> {
@@ -324,14 +324,14 @@ class DeepFlowAdviceRecordingTest {
         Thread t1 = new Thread(() -> {
             awaitQuietly(startLatch);
             DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-            thread1Id.set(DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0]);
+            thread1Id.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
             DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
             doneLatch.countDown();
         });
         Thread t2 = new Thread(() -> {
             awaitQuietly(startLatch);
             DeepFlowAdvice.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-            thread2Id.set(DeepFlowAdvice.CURRENT_REQUEST_ID.get()[0]);
+            thread2Id.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
             DeepFlowAdvice.recordExit(intMethod, 0, null, new Object[]{});
             doneLatch.countDown();
         });

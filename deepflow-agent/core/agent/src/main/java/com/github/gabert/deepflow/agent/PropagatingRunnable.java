@@ -1,18 +1,18 @@
 package com.github.gabert.deepflow.agent;
 
-class PropagatingRunnable implements Runnable {
+public class PropagatingRunnable implements Runnable {
     private final Runnable delegate;
     private final long parentRequestId;
 
-    PropagatingRunnable(Runnable delegate, long parentRequestId) {
+    public PropagatingRunnable(Runnable delegate, long parentRequestId) {
         this.delegate = delegate;
         this.parentRequestId = parentRequestId;
     }
 
     @Override
     public void run() {
-        long[] requestIdHolder = DeepFlowAdvice.CURRENT_REQUEST_ID.get();
-        int[] depthHolder = DeepFlowAdvice.DEPTH.get();
+        long[] requestIdHolder = RequestContext.CURRENT_REQUEST_ID.get();
+        int[] depthHolder = RequestContext.DEPTH.get();
 
         long savedRequestId = requestIdHolder[0];
         int savedDepth = depthHolder[0];

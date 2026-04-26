@@ -14,7 +14,6 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -31,9 +30,7 @@ public class DeepFlowAdvice {
     private static volatile SessionIdResolver SESSION_ID_RESOLVER;
     private static volatile boolean JPA_PROXY_RESOLVER_INITIALIZED;
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
-    private static final AtomicLong REQUEST_COUNTER = new AtomicLong(0);
-    static final ThreadLocal<long[]> CURRENT_REQUEST_ID = ThreadLocal.withInitial(() -> new long[]{0L});
-    static final ThreadLocal<int[]> DEPTH = ThreadLocal.withInitial(() -> new int[]{0});
+    // Thread-local state lives in RequestContext (injected into bootstrap classloader)
 
     public static void setup(AgentConfig config) {
         CONFIG = config;
@@ -81,10 +78,10 @@ public class DeepFlowAdvice {
 
             String sessionId = getResolver().resolve();
 
-            int[] depthHolder = DEPTH.get();
-            long[] requestIdHolder = CURRENT_REQUEST_ID.get();
+            int[] depthHolder = RequestContext.DEPTH.get();
+            long[] requestIdHolder = RequestContext.CURRENT_REQUEST_ID.get();
             if (depthHolder[0] == 0) {
-                requestIdHolder[0] = REQUEST_COUNTER.incrementAndGet();
+                requestIdHolder[0] = RequestContext.REQUEST_COUNTER.incrementAndGet();
             }
             depthHolder[0]++;
             long requestId = requestIdHolder[0];
@@ -112,8 +109,8 @@ public class DeepFlowAdvice {
     public static void recordExit(Method method, Object returned, Throwable throwable,
                                    Object[] allArguments) {
         if (RECORD_BUFFER == null) return;
-        int[] depthHolder = DEPTH.get();
-        long requestId = CURRENT_REQUEST_ID.get()[0];
+        int[] depthHolder = RequestContext.DEPTH.get();
+        long requestId = RequestContext.CURRENT_REQUEST_ID.get()[0];
         if (depthHolder[0] > 0) {
             depthHolder[0]--;
         }
