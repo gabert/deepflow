@@ -9,13 +9,23 @@ public class RecordProcessorServer {
     }
 
     public void start() {
-        RecordSink sink = new LoggingSink();
+        RecordSink sink = createSink(config);
         consumer = new KafkaRecordConsumer(config, sink);
 
         System.out.println("RecordProcessorServer started — consuming from topic '"
-                + config.getKafkaTopic() + "'");
+                + config.getKafkaTopic() + "', sink=" + config.getSinkType());
 
         consumer.pollLoop();
+    }
+
+    private static RecordSink createSink(ProcessorConfig config) {
+        return switch (config.getSinkType()) {
+            case "logging" -> new LoggingSink();
+            case "clickhouse" -> new ClickHouseSink(config);
+            default -> throw new IllegalArgumentException(
+                    "Unknown sink_type: " + config.getSinkType()
+                            + " (expected: clickhouse | logging)");
+        };
     }
 
     public void stop() {

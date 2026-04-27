@@ -38,7 +38,8 @@ public class FileDestination implements Destination {
 
     @Override
     public void accept(byte[] record) {
-        RecordRenderer.Result result = RecordRenderer.render(record, emitTags);
+        RecordRenderer.Result result = RecordHashEnricher.enrich(
+                RecordRenderer.render(record, emitTags));
         if (result.threadName() == null) {
             // Version record has no thread — buffer its lines for file headers
             pendingHeader.addAll(result.lines());

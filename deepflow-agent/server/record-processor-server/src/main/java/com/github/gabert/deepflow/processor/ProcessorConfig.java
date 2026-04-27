@@ -13,6 +13,7 @@ public class ProcessorConfig {
     private static final String DEFAULT_CLICKHOUSE_DATABASE = "deepflow";
     private static final String DEFAULT_CLICKHOUSE_USER = "deepflow";
     private static final String DEFAULT_CLICKHOUSE_PASSWORD = "deepflow";
+    private static final String DEFAULT_SINK_TYPE = "clickhouse";
 
     private final String kafkaBootstrapServers;
     private final String kafkaTopic;
@@ -21,6 +22,7 @@ public class ProcessorConfig {
     private final String clickhouseDatabase;
     private final String clickhouseUser;
     private final String clickhousePassword;
+    private final String sinkType;
 
     private ProcessorConfig(Map<String, String> configMap) {
         this.kafkaBootstrapServers = configMap.getOrDefault(
@@ -37,6 +39,7 @@ public class ProcessorConfig {
                 "clickhouse_user", DEFAULT_CLICKHOUSE_USER);
         this.clickhousePassword = configMap.getOrDefault(
                 "clickhouse_password", DEFAULT_CLICKHOUSE_PASSWORD);
+        this.sinkType = configMap.getOrDefault("sink_type", DEFAULT_SINK_TYPE);
     }
 
     public String getKafkaBootstrapServers() {
@@ -65,6 +68,10 @@ public class ProcessorConfig {
 
     public String getClickhousePassword() {
         return clickhousePassword;
+    }
+
+    public String getSinkType() {
+        return sinkType;
     }
 
     public static ProcessorConfig load(String[] args) throws IOException {

@@ -1,5 +1,6 @@
 package com.github.gabert.deepflow.processor;
 
+import com.github.gabert.deepflow.recorder.destination.RecordHashEnricher;
 import com.github.gabert.deepflow.recorder.destination.RecordRenderer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -62,8 +63,9 @@ public class KafkaRecordConsumer implements AutoCloseable {
 
     private void processRecord(byte[] rawBatch) {
         try {
-            RecordRenderer.Result result = RecordRenderer.render(rawBatch);
-            sink.accept(result);
+            RecordRenderer.Result rendered = RecordRenderer.render(rawBatch);
+            RecordRenderer.Result enriched = RecordHashEnricher.enrich(rendered);
+            sink.accept(enriched);
         } catch (Exception e) {
             System.err.println("[DeepFlow] Failed to process record batch: " + e.getMessage());
         }
