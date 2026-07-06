@@ -301,13 +301,14 @@ trigger an emergency clear with logging.
 
 **Status:** ACCEPTED. Severity dropped to Low after the
 transport-layer rework (every Kafka batch upserts `agent_runs`).
-**Where:** `ClickHouseSink.flushLocked` for `agentRunBuffer`.
+**Where:** `ClickHouseSink.flush` for `agentRunBuffer`.
 
-**Symptom:** `agent_runs` is upserted on every Kafka batch from the
-headers (idempotent via `ReplacingMergeTree`). A single CH-insert
-failure for one batch leaves the row not yet present, but the next
-batch retries it. The window of vulnerability shrinks from "rest of
-JVM lifetime" to "until the next batch lands."
+**Symptom:** `agent_runs` is buffered once per distinct run id per
+flush window and upserted from the headers (idempotent via
+`ReplacingMergeTree`). A single CH-insert failure for one flush
+leaves the row not yet present, but the next flush window re-issues
+it. The window of vulnerability shrinks from "rest of JVM lifetime"
+to "until the next flush lands."
 
 **Residual:** If the JVM emits one batch and dies before any
 subsequent batch, that one failed insert is the only chance and the

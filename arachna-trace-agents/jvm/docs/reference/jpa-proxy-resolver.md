@@ -14,7 +14,7 @@ does not match the declared type.
 ## Interface
 
 ```java
-package com.github.gabert.arachna.trace.jpaproxy;
+package com.github.gabert.arachna.trace.spi.jpaproxy;
 
 public interface JpaProxyResolver {
     String name();                 // unique name for selection via config
@@ -93,7 +93,7 @@ returns `null`.
 1. Implement `JpaProxyResolver`
 2. Register via ServiceLoader:
    ```
-   META-INF/services/com.github.gabert.arachna.trace.jpaproxy.JpaProxyResolver
+   META-INF/services/com.github.gabert.arachna.trace.spi.jpaproxy.JpaProxyResolver
    ```
 3. Place JAR on application classpath
 4. Set `jpa_proxy_resolver=<your-name>` in config

@@ -1,5 +1,7 @@
 package com.github.gabert.arachna.trace.recorder.destination;
 
+import com.github.gabert.arachna.trace.renderer.RecordRenderer;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;

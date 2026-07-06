@@ -1,14 +1,28 @@
 package com.github.gabert.arachna.trace.processor;
 
-import com.github.gabert.arachna.trace.recorder.destination.RecordRenderer.Result;
+import com.github.gabert.arachna.trace.codec.Codec;
+import com.github.gabert.arachna.trace.recorder.record.ArgumentsExitRecord;
+import com.github.gabert.arachna.trace.recorder.record.ArgumentsRecord;
+import com.github.gabert.arachna.trace.recorder.record.ExceptionRecord;
+import com.github.gabert.arachna.trace.recorder.record.MethodEndRecord;
+import com.github.gabert.arachna.trace.recorder.record.MethodStartRecord;
+import com.github.gabert.arachna.trace.recorder.record.ReturnRecord;
+import com.github.gabert.arachna.trace.recorder.record.SequenceRecord;
+import com.github.gabert.arachna.trace.recorder.record.ThisInstanceRecord;
+import com.github.gabert.arachna.trace.recorder.record.ThisInstanceRefRecord;
+import com.github.gabert.arachna.trace.recorder.record.TraceRecord;
+import com.github.gabert.arachna.trace.recorder.record.VersionRecord;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RecordParserTest {
 
@@ -16,24 +30,15 @@ class RecordParserTest {
     private static final UUID INN  = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     @Test
-    void singleCallProducesOneParsedCall() {
-        Result r = result(
-                "TS;1000",
-                "SI;sess-1",
-                "MS;com.example.Foo.bar()V",
-                "TN;main",
-                "RI;42",
-                "CL;55",
-                "CI;" + OUT,
-                "TI;7",
-                "AR;{\"__meta__\":{\"id\":7,\"class\":\"X\",\"hash\":\"abc\"}}",
-                "TE;1500",
-                "TN;main",
-                "RI;42",
-                "CI;" + OUT,
-                "RT;VOID");
+    void singleCallProducesOneParsedCall() throws IOException {
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "com.example.Foo.bar()V", "main", 1000, 42),
+                new ThisInstanceRefRecord(7),
+                args(Map.of("a", 1)),
+                me(OUT, "main", 1500, 42),
+                ReturnRecord.ofVoid());
 
-        List<ParsedCall> calls = new RecordParser().parse(r);
+        List<ParsedCall> calls = new RecordParser().parse(records);
 
         assertEquals(1, calls.size());
         ParsedCall c = calls.get(0);
@@ -45,24 +50,24 @@ class RecordParserTest {
         assertEquals(1000L, c.tsInMillis());
         assertEquals(1500L, c.tsOutMillis());
         assertEquals("com.example.Foo.bar()V", c.signature());
-        assertEquals(55, c.callerLine());
+        assertEquals(1, c.callerLine());
         assertEquals("VOID", c.returnType());
         assertEquals(7L, c.thisIdRef());
         assertNull(c.thisJson());
+        assertNotNull(c.argsJson());
     }
 
     @Test
     void nestedCallsAreEmittedInPostOrderAndCarryParentLink() {
-        // Outer A calls inner B. Inner ends first, outer ends second.
-        Result r = result(
-                "TS;1000", "MS;A.outer()V", "TN;t", "RI;1", "CL;10",
-                "CI;" + OUT, "AR;{}",
-                "TS;1100", "MS;B.inner()V", "TN;t", "RI;1", "CL;20",
-                "CI;" + INN, "PI;" + OUT, "AR;{}",
-                "TE;1200", "TN;t", "RI;1", "CI;" + INN, "RT;VOID",
-                "TE;1300", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID");
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "A.outer()V", "t", 1000, 1),
+                ms(INN, OUT, "B.inner()V", "t", 1100, 1),
+                me(INN, "t", 1200, 1),
+                ReturnRecord.ofVoid(),
+                me(OUT, "t", 1300, 1),
+                ReturnRecord.ofVoid());
 
-        List<ParsedCall> calls = new RecordParser().parse(r);
+        List<ParsedCall> calls = new RecordParser().parse(records);
 
         assertEquals(2, calls.size());
         ParsedCall inner = calls.get(0);
@@ -81,116 +86,130 @@ class RecordParserTest {
     }
 
     @Test
-    void valueReturnIsCaptured() {
-        Result r = result(
-                "TS;1", "MS;F.f()I", "TN;t", "RI;1", "CL;1", "CI;" + OUT,
-                "TE;2", "TN;t", "RI;1", "CI;" + OUT, "RT;VALUE", "RE;42");
-        ParsedCall c = new RecordParser().parse(r).get(0);
+    void valueReturnIsCaptured() throws IOException {
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "F.f()I", "t", 1, 1),
+                me(OUT, "t", 2, 1),
+                new ReturnRecord(Codec.encode(42)));
+
+        ParsedCall c = new RecordParser().parse(records).get(0);
         assertEquals("VALUE", c.returnType());
         assertEquals("42", c.returnJson());
     }
 
     @Test
-    void exceptionReturnIsCaptured() {
-        Result r = result(
-                "TS;1", "MS;F.f()V", "TN;t", "RI;1", "CL;1", "CI;" + OUT,
-                "TE;2", "TN;t", "RI;1", "CI;" + OUT,
-                "RT;EXCEPTION", "RE;{\"class\":\"java.lang.RuntimeException\"}");
-        ParsedCall c = new RecordParser().parse(r).get(0);
+    void exceptionReturnIsCaptured() throws IOException {
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "F.f()V", "t", 1, 1),
+                me(OUT, "t", 2, 1),
+                new ExceptionRecord(Codec.encode(Map.of("message", "boom"))));
+
+        ParsedCall c = new RecordParser().parse(records).get(0);
         assertEquals("EXCEPTION", c.returnType());
         assertNotNull(c.returnJson());
+        assertTrue(c.returnJson().contains("boom"));
     }
 
     @Test
-    void argsExitIsCapturedSeparately() {
-        Result r = result(
-                "TS;1", "MS;F.f()V", "TN;t", "RI;1", "CL;1", "CI;" + OUT,
-                "AR;{\"v\":1}",
-                "TE;2", "TN;t", "RI;1", "CI;" + OUT,
-                "RT;VOID", "AX;{\"v\":2}");
-        ParsedCall c = new RecordParser().parse(r).get(0);
-        assertEquals("{\"v\":1}", c.argsJson());
-        assertEquals("{\"v\":2}", c.argsExitJson());
+    void argsExitIsCapturedSeparately() throws IOException {
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "F.f()V", "t", 1, 1),
+                args(Map.of("v", 1)),
+                me(OUT, "t", 2, 1),
+                ReturnRecord.ofVoid(),
+                argsExit(Map.of("v", 2)));
+
+        ParsedCall c = new RecordParser().parse(records).get(0);
+        assertNotNull(c.argsJson());
+        assertNotNull(c.argsExitJson());
+        assertTrue(c.argsJson().contains("\"v\":1"));
+        assertTrue(c.argsExitJson().contains("\"v\":2"));
     }
 
     @Test
-    void thisAsFullJsonGoesIntoThisJsonNotRef() {
-        Result r = result(
-                "TS;1", "MS;F.f()V", "TN;t", "RI;1", "CL;1", "CI;" + OUT,
-                "TI;{\"__meta__\":{\"id\":99,\"class\":\"X\",\"hash\":\"a\"}}",
-                "TE;2", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID");
-        ParsedCall c = new RecordParser().parse(r).get(0);
+    void thisAsFullCborGoesIntoThisJsonNotRefAndIsHashEnriched() throws IOException {
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "F.f()V", "t", 1, 1),
+                new ThisInstanceRecord(Codec.encode(Map.of("field", "value"))),
+                me(OUT, "t", 2, 1),
+                ReturnRecord.ofVoid());
+
+        ParsedCall c = new RecordParser().parse(records).get(0);
         assertNull(c.thisIdRef());
         assertNotNull(c.thisJson());
+        assertTrue(c.thisJson().contains("__meta__"),
+                "TI payload JSON must carry Merkle __meta__ enrichment");
     }
 
     @Test
     void staticMethodHasNeitherThisRefNorJson() {
-        Result r = result(
-                "TS;1", "MS;F.staticThing()V", "TN;t", "RI;1", "CL;1", "CI;" + OUT,
-                "AR;{}",
-                "TE;2", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID");
-        ParsedCall c = new RecordParser().parse(r).get(0);
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "F.staticThing()V", "t", 1, 1),
+                me(OUT, "t", 2, 1),
+                ReturnRecord.ofVoid());
+
+        ParsedCall c = new RecordParser().parse(records).get(0);
         assertNull(c.thisIdRef());
         assertNull(c.thisJson());
     }
 
     @Test
-    void unmatchedTeWithoutOpenCallIsIgnored() {
+    void unmatchedMeWithoutOpenCallIsIgnored() {
         // ME with a callId that was never seen as MS — orphan, drop silently.
         // Defence-in-depth: RequestRecorder's failed-entry contract should
         // suppress the matching exit upstream, but the parser must still not
         // produce a half-built call if a stray ME ever slips through.
-        Result r = result("TE;1", "TN;t", "RI;1", "CI;" + OUT);
-        assertEquals(0, new RecordParser().parse(r).size());
+        List<TraceRecord> records = List.of(
+                me(OUT, "t", 1, 1),
+                ReturnRecord.ofVoid());
+        assertEquals(0, new RecordParser().parse(records).size());
     }
 
     @Test
-    void unmatchedMsWithoutTeStaysOpenAcrossBatches() {
+    void unmatchedMsWithoutMeStaysOpenAcrossBatches() {
         // Truncated stream — agent crashed mid-call. The MS lives in the
         // open-calls map until the TTL sweep reaps it (see
         // staleOpenCallIsEvictedAfterTtl); it never surfaces as a completed
         // call.
         RecordParser parser = new RecordParser();
-        Result r = result(
-                "TS;1", "MS;F.f()V", "TN;t", "RI;1", "CL;1", "CI;" + OUT);
-        assertEquals(0, parser.parse(r).size());
+        assertEquals(0, parser.parse(List.of(
+                ms(OUT, null, "F.f()V", "t", 1, 1))).size());
+        assertEquals(1, parser.openCallCount());
     }
 
     @Test
-    void agentOrderTeBeforeRtAttachesReturnToCorrectCall() {
+    void agentOrderMeBeforeReturnAttachesReturnToCorrectCall() throws IOException {
         // Real wire order from RequestRecorder.recordExit():
         //   METHOD_END, RETURN, ARGUMENTS_EXIT
-        // i.e. TE comes BEFORE the call's own RT/RE/AX. The parser's
-        // exit-context state holds across these tags until next TS/TE.
-        Result r = result(
-                "TS;1000", "MS;F.f()I", "TN;t", "RI;1", "CL;1", "CI;" + OUT,
-                "AR;{}",
-                "TE;2000", "TN;t", "RI;1", "CI;" + OUT,
-                "RT;VALUE", "RE;42",
-                "AX;{}");
-        List<ParsedCall> calls = new RecordParser().parse(r);
+        // i.e. the ME comes BEFORE the call's own return/args-exit records.
+        // The parser's exit context holds across them until the next MS/ME.
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "F.f()I", "t", 1000, 1),
+                args(Map.of()),
+                me(OUT, "t", 2000, 1),
+                new ReturnRecord(Codec.encode(42)),
+                argsExit(Map.of()));
+
+        List<ParsedCall> calls = new RecordParser().parse(records);
         assertEquals(1, calls.size());
         ParsedCall c = calls.get(0);
         assertEquals(2000L, c.tsOutMillis());
         assertEquals("VALUE", c.returnType());
         assertEquals("42", c.returnJson());
-        assertEquals("{}", c.argsExitJson());
+        assertNotNull(c.argsExitJson());
     }
 
     @Test
-    void agentOrderNestedDoesNotLeakReturnToParent() {
-        // Outer A calls inner B. Inner exits (TE first, then RT/RE), then outer exits.
-        Result r = result(
-                "TS;1000", "MS;A.outer()V", "TN;t", "RI;1", "CL;10",
-                "CI;" + OUT, "AR;{}",
-                "TS;1100", "MS;B.inner()I", "TN;t", "RI;1", "CL;20",
-                "CI;" + INN, "PI;" + OUT, "AR;{}",
-                "TE;1200", "TN;t", "RI;1", "CI;" + INN,
-                "RT;VALUE", "RE;7",
-                "TE;1300", "TN;t", "RI;1", "CI;" + OUT,
-                "RT;VOID");
-        List<ParsedCall> calls = new RecordParser().parse(r);
+    void agentOrderNestedDoesNotLeakReturnToParent() throws IOException {
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "A.outer()V", "t", 1000, 1),
+                ms(INN, OUT, "B.inner()I", "t", 1100, 1),
+                me(INN, "t", 1200, 1),
+                new ReturnRecord(Codec.encode(7)),
+                me(OUT, "t", 1300, 1),
+                ReturnRecord.ofVoid());
+
+        List<ParsedCall> calls = new RecordParser().parse(records);
         assertEquals(2, calls.size());
         ParsedCall inner = calls.get(0);
         assertEquals("B.inner()I", inner.signature());
@@ -204,34 +223,31 @@ class RecordParserTest {
 
     @Test
     void versionBannerIsIgnored() {
-        Result r = result(
-                "VR;1.3",
-                "TS;1", "MS;F.f()V", "TN;t", "RI;1", "CL;1", "CI;" + OUT,
-                "TE;2", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID");
-        assertEquals(1, new RecordParser().parse(r).size());
+        List<TraceRecord> records = List.of(
+                VersionRecord.current(),
+                ms(OUT, null, "F.f()V", "t", 1, 1),
+                me(OUT, "t", 2, 1),
+                ReturnRecord.ofVoid());
+        assertEquals(1, new RecordParser().parse(records).size());
     }
 
     // ============================================================
-    //  Bug fix: cross-batch pairing — the central reason for this
-    //  parser refactor. The OLD parser would silently drop the call
-    //  whose MS landed in batch N and ME landed in batch N+1.
+    //  Cross-batch pairing — the central reason the parser is
+    //  stateful and UUID-keyed: a call whose MS lands in batch N
+    //  and ME in batch N+1 must still pair.
     // ============================================================
 
     @Test
     void msInOneBatchAndMeInAnotherStillPair() {
         RecordParser parser = new RecordParser();
 
-        // Batch 1: just the MS half.
-        Result batch1 = result(
-                "TS;1000", "MS;F.f()V", "TN;t", "RI;1", "CL;1",
-                "CI;" + OUT, "AR;{}");
-        assertEquals(0, parser.parse(batch1).size(),
+        assertEquals(0, parser.parse(List.of(
+                        ms(OUT, null, "F.f()V", "t", 1000, 1))).size(),
                 "MS without ME yields no completed call yet");
 
-        // Batch 2: the ME half. Old parser dropped this on the floor.
-        Result batch2 = result(
-                "TE;2000", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID");
-        List<ParsedCall> completed = parser.parse(batch2);
+        List<ParsedCall> completed = parser.parse(List.of(
+                me(OUT, "t", 2000, 1),
+                ReturnRecord.ofVoid()));
 
         assertEquals(1, completed.size(), "MS↔ME must pair across batches");
         ParsedCall c = completed.get(0);
@@ -242,20 +258,22 @@ class RecordParserTest {
 
     @Test
     void interleavedThreadsInOneBatchPairCorrectlyByCallId() {
-        // Two concurrent calls on different threads, lines interleaved
+        // Two concurrent calls on different threads, records interleaved
         // (which is what happens in production — the global RecordBuffer
-        // is drained in time order, mixing threads). The old stack-based
-        // parser would mispair these; UUID-keyed pairing handles it.
-        Result r = result(
-                "TS;1000", "MS;A.a()V", "TN;t1", "RI;1", "CL;1", "CI;" + OUT,
-                "TS;1010", "MS;B.b()V", "TN;t2", "RI;2", "CL;2", "CI;" + INN,
-                "TE;1020", "TN;t2", "RI;2", "CI;" + INN, "RT;VOID",
-                "TE;1030", "TN;t1", "RI;1", "CI;" + OUT, "RT;VOID");
+        // is drained in time order, mixing threads). UUID-keyed pairing
+        // handles what a stack-based parser would mispair.
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "A.a()V", "t1", 1000, 1),
+                ms(INN, null, "B.b()V", "t2", 1010, 2),
+                me(INN, "t2", 1020, 2),
+                ReturnRecord.ofVoid(),
+                me(OUT, "t1", 1030, 1),
+                ReturnRecord.ofVoid());
 
-        List<ParsedCall> calls = new RecordParser().parse(r);
+        List<ParsedCall> calls = new RecordParser().parse(records);
 
         assertEquals(2, calls.size());
-        // First completed: t2's call (its TE came first).
+        // First completed: t2's call (its ME came first).
         ParsedCall first = calls.get(0);
         assertEquals(INN, first.callId());
         assertEquals("t2", first.threadName());
@@ -270,32 +288,6 @@ class RecordParserTest {
     }
 
     @Test
-    void duplicateCiInEntryBlockIsIgnoredNotLeaked() {
-        // Defensive (B-02 in KNOWN_BUGS.md): a malformed MS block with two
-        // CI tags must NOT leak the first builder under a stale key. The
-        // second CI is ignored; only the first key is in openCalls; pairing
-        // works on that one.
-        Result r = result(
-                "TS;1000", "MS;F.f()V", "TN;t", "RI;1", "CL;1",
-                "CI;" + OUT,
-                "CI;" + INN,             // duplicate — must be ignored
-                "TE;2000", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID");
-
-        List<ParsedCall> calls = new RecordParser().parse(r);
-
-        assertEquals(1, calls.size());
-        assertEquals(OUT, calls.get(0).callId(),
-                "first CI wins; second is ignored");
-
-        // Verify pairing succeeded by going through the second-CI's id too:
-        // a TE for INN should now be orphan (not in openCalls) — confirming
-        // the second CI never made it into the map.
-        Result orphan = result(
-                "TE;3000", "TN;t", "RI;1", "CI;" + INN, "RT;VOID");
-        assertEquals(0, new RecordParser().parse(orphan).size());
-    }
-
-    @Test
     void staleOpenCallIsEvictedAfterTtl() {
         // L-01: an MS without a matching ME (agent crash mid-call) used to
         // sit in openCalls forever. The TTL sweep at the end of parse() must
@@ -305,89 +297,89 @@ class RecordParserTest {
         RecordParser parser = new RecordParser(() -> now[0]);
 
         now[0] = 0L;
-        parser.parse(result(
-                "TS;0", "MS;F.f()V", "TN;t", "RI;1", "CL;1", "CI;" + OUT, "AR;{}"));
+        parser.parse(List.of(ms(OUT, null, "F.f()V", "t", 0, 1)));
         assertEquals(1, parser.openCallCount(),
                 "MS without ME should leave one builder in openCalls");
 
         // Inside TTL — sweep runs but evicts nothing.
         now[0] = 5 * 60 * 1000L;
-        parser.parse(result());
+        parser.parse(List.of());
         assertEquals(1, parser.openCallCount(),
                 "entry under TTL must not be evicted");
 
         // Past TTL, past sweep interval — eviction fires.
         now[0] = 11 * 60 * 1000L;
-        parser.parse(result());
+        parser.parse(List.of());
         assertEquals(0, parser.openCallCount(),
                 "entry older than TTL must be evicted by the sweep");
 
         // A late ME for the evicted call is now an orphan, dropped silently.
-        List<ParsedCall> late = parser.parse(result(
-                "TE;12000", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID"));
+        List<ParsedCall> late = parser.parse(List.of(
+                me(OUT, "t", 12000, 1),
+                ReturnRecord.ofVoid()));
         assertEquals(0, late.size(),
                 "ME for a previously-evicted call must be treated as orphan");
     }
 
     @Test
-    void sqTagAttachesSeqByCallId() {
-        Result r = result(
-                "TS;1000", "MS;A()V", "TN;t", "RI;1", "CL;1",
-                "CI;" + OUT,
-                "SQ;" + OUT + "|7",
-                "TE;1100", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID");
+    void sequenceRecordAttachesSeqByCallId() {
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "A()V", "t", 1000, 1),
+                new SequenceRecord(OUT, 7),
+                me(OUT, "t", 1100, 1),
+                ReturnRecord.ofVoid());
 
-        ParsedCall c = new RecordParser().parse(r).get(0);
+        ParsedCall c = new RecordParser().parse(records).get(0);
         assertEquals(7L, c.seq());
     }
 
     @Test
-    void sqTagRoutesByCallIdNotAdjacency() {
-        // Two MS blocks interleaved with their SQ records.
-        // SQ;OUT|10 must land on OUT's call, SQ;INN|11 on INN's, regardless
-        // of which one came first in the stream.
-        Result r = result(
-                "TS;1000", "MS;A()V", "TN;t", "RI;1", "CL;1", "CI;" + OUT,
-                "TS;1100", "MS;B()V", "TN;t", "RI;1", "CL;2", "CI;" + INN, "PI;" + OUT,
-                // The two SQ records arrive in the "wrong" order vs their MSs.
-                "SQ;" + INN + "|11",
-                "SQ;" + OUT + "|10",
-                "TE;1200", "TN;t", "RI;1", "CI;" + INN, "RT;VOID",
-                "TE;1300", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID");
+    void sequenceRecordRoutesByCallIdNotAdjacency() {
+        // Two MS records with their SQ records arriving in the "wrong" order
+        // vs their MSs — routing is by callId, not stream adjacency.
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "A()V", "t", 1000, 1),
+                ms(INN, OUT, "B()V", "t", 1100, 1),
+                new SequenceRecord(INN, 11),
+                new SequenceRecord(OUT, 10),
+                me(INN, "t", 1200, 1),
+                ReturnRecord.ofVoid(),
+                me(OUT, "t", 1300, 1),
+                ReturnRecord.ofVoid());
 
-        List<ParsedCall> calls = new RecordParser().parse(r);
-        // Order: inner emitted first (TE for INN) then outer.
+        List<ParsedCall> calls = new RecordParser().parse(records);
+        // Order: inner emitted first (ME for INN) then outer.
         assertEquals(11L, calls.get(0).seq(), "B's seq must be 11");
         assertEquals(10L, calls.get(1).seq(), "A's seq must be 10");
     }
 
     @Test
-    void sqTagAbsentLeavesSeqAtZero() {
-        // No SQ in the stream — seq stays at the default 0.
-        Result r = result(
-                "TS;1000", "MS;A()V", "TN;t", "RI;1", "CL;1", "CI;" + OUT,
-                "TE;1100", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID");
+    void sequenceRecordAbsentLeavesSeqAtZero() {
+        List<TraceRecord> records = List.of(
+                ms(OUT, null, "A()V", "t", 1000, 1),
+                me(OUT, "t", 1100, 1),
+                ReturnRecord.ofVoid());
 
-        assertEquals(0L, new RecordParser().parse(r).get(0).seq());
+        assertEquals(0L, new RecordParser().parse(records).get(0).seq());
     }
 
-    @Test
-    void malformedSqSeqDoesNotClobberPreviousValidSeq() {
-        // VERIFY-5: parseLongOrZero silently rewrites a valid seq with 0 if a
-        // later malformed SQ for the same callId is seen. The SQ case must
-        // bail on number-format failure, not assign seq=0.
-        Result r = result(
-                "TS;1000", "MS;A()V", "TN;t", "RI;1", "CL;1", "CI;" + OUT,
-                "SQ;" + OUT + "|7",
-                "SQ;" + OUT + "|garbage",
-                "TE;1100", "TN;t", "RI;1", "CI;" + OUT, "RT;VOID");
+    // --- record builders -----------------------------------------------
 
-        ParsedCall c = new RecordParser().parse(r).get(0);
-        assertEquals(7L, c.seq(),
-                "malformed seq must not overwrite the earlier valid value");
+    private static MethodStartRecord ms(UUID callId, UUID parentCallId, String signature,
+                                        String threadName, long timestamp, long requestId) {
+        return new MethodStartRecord("sess-1", signature, threadName, timestamp, 1,
+                requestId, callId, parentCallId);
     }
 
-    private static Result result(String... lines) {
-        return new Result("test-thread", List.of(lines));
+    private static MethodEndRecord me(UUID callId, String threadName, long timestamp, long requestId) {
+        return new MethodEndRecord("sess-1", threadName, timestamp, requestId, callId);
+    }
+
+    private static ArgumentsRecord args(Map<String, Object> argsMap) throws IOException {
+        return new ArgumentsRecord(Codec.encode(argsMap));
+    }
+
+    private static ArgumentsExitRecord argsExit(Map<String, Object> argsMap) throws IOException {
+        return new ArgumentsExitRecord(Codec.encode(argsMap));
     }
 }

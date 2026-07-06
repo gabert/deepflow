@@ -1,8 +1,8 @@
 package com.github.gabert.arachna.trace.processor;
 
 import com.github.gabert.arachna.trace.codec.AgentRun;
-import com.github.gabert.arachna.trace.recorder.destination.RecordHashEnricher;
-import com.github.gabert.arachna.trace.recorder.destination.RecordRenderer;
+import com.github.gabert.arachna.trace.recorder.record.RecordReader;
+import com.github.gabert.arachna.trace.recorder.record.TraceRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -68,10 +68,18 @@ public class KafkaRecordConsumer implements AutoCloseable {
 
     private void processRecord(ConsumerRecord<String, byte[]> record) {
         try {
-            RecordRenderer.Result rendered = RecordRenderer.render(record.value());
-            RecordRenderer.Result enriched = RecordHashEnricher.enrich(rendered);
-            AgentRun headerMetadata = extractAgentRun(record.headers());
-            sink.accept(enriched, headerMetadata);
+            AgentRun agentRun = extractAgentRun(record.headers());
+            if (agentRun == null) {
+                // Agent-run identity travels at the transport layer (Kafka
+                // headers). A batch without it is malformed — almost certainly
+                // a misconfigured producer. We cannot attribute the calls, so
+                // drop the batch and surface the error operationally.
+                System.err.println("[ArachnaTrace] Dropping batch: missing agent-run headers (expected "
+                        + AgentRun.Headers.AGENT_RUN_ID + " on Kafka record headers)");
+                return;
+            }
+            List<TraceRecord> records = RecordReader.readAll(record.value());
+            sink.accept(records, agentRun);
         } catch (Exception e) {
             System.err.println("[ArachnaTrace] Failed to process record batch: " + e.getMessage());
         }

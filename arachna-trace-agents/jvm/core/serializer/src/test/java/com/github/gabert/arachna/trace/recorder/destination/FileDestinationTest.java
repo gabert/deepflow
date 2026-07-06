@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.gabert.arachna.trace.codec.Codec;
 import com.github.gabert.arachna.trace.codec.AgentRun;
 import com.github.gabert.arachna.trace.recorder.record.RecordWriter;
+import com.github.gabert.arachna.trace.renderer.RecordRenderer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

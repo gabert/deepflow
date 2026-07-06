@@ -77,7 +77,7 @@ with `@Component` — register it explicitly so the wiring is visible in
 your app:
 
 ```java
-import com.github.gabert.arachna.trace.agent.session.spring.SessionIdFilter;
+import com.github.gabert.arachna.trace.spi.session.spring.SessionIdFilter;
 
 @SpringBootApplication
 public class MyApp {

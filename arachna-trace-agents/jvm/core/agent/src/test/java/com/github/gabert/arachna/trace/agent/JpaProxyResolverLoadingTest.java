@@ -1,6 +1,6 @@
 package com.github.gabert.arachna.trace.agent;
 
-import com.github.gabert.arachna.trace.jpaproxy.JpaProxyResolver;
+import com.github.gabert.arachna.trace.spi.jpaproxy.JpaProxyResolver;
 import com.github.gabert.arachna.trace.agent.spi.SpiLoader;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +15,7 @@ class JpaProxyResolverLoadingTest {
 
     @Test
     void middleProviderSelectedFromMultiple() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=beta");
+        AgentConfig config = AgentConfig.from("jpa_proxy_resolver=beta");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
         JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, testClassLoader);
@@ -26,7 +26,7 @@ class JpaProxyResolverLoadingTest {
 
     @Test
     void firstProviderSelectedFromMultiple() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=alpha");
+        AgentConfig config = AgentConfig.from("jpa_proxy_resolver=alpha");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
         JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, testClassLoader);
@@ -37,7 +37,7 @@ class JpaProxyResolverLoadingTest {
 
     @Test
     void lastProviderSelectedFromMultiple() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=gamma");
+        AgentConfig config = AgentConfig.from("jpa_proxy_resolver=gamma");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
         JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, testClassLoader);
@@ -50,7 +50,7 @@ class JpaProxyResolverLoadingTest {
 
     @Test
     void unmatchedNameReturnsNull() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=nonexistent");
+        AgentConfig config = AgentConfig.from("jpa_proxy_resolver=nonexistent");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
         JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, testClassLoader);
@@ -62,7 +62,7 @@ class JpaProxyResolverLoadingTest {
 
     @Test
     void noConfigReturnsNull() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("");
+        AgentConfig config = AgentConfig.from("");
 
         JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config,
                 Thread.currentThread().getContextClassLoader());
@@ -74,7 +74,7 @@ class JpaProxyResolverLoadingTest {
 
     @Test
     void noSpiOnClasspathReturnsNull() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("jpa_proxy_resolver=beta");
+        AgentConfig config = AgentConfig.from("jpa_proxy_resolver=beta");
         ClassLoader emptyClassLoader = new URLClassLoader(new java.net.URL[0], null);
 
         JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, emptyClassLoader);

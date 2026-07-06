@@ -1,6 +1,6 @@
 package com.github.gabert.arachna.trace.agent;
 
-import com.github.gabert.arachna.trace.jpaproxy.JpaProxyResolver;
+import com.github.gabert.arachna.trace.spi.jpaproxy.JpaProxyResolver;
 
 public class TestJpaProxyResolverGamma implements JpaProxyResolver {
 

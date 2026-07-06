@@ -3,8 +3,9 @@ package com.github.gabert.arachna.trace.processor;
 import java.util.UUID;
 
 /**
- * One method invocation flattened from the line stream produced by
- * {@link com.github.gabert.arachna.trace.recorder.destination.RecordRenderer}.
+ * One method invocation flattened from the typed
+ * {@link com.github.gabert.arachna.trace.recorder.record.TraceRecord} stream
+ * by {@link RecordParser}. Payload JSON fields are already hash-enriched.
  *
  * <p>Both {@code thisIdRef} and {@code thisJson} can be null:
  * static methods have no {@code TI} record; instance methods produce either

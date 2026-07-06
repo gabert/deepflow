@@ -4,10 +4,10 @@ import com.github.gabert.arachna.trace.agent.advice.ArachnaTraceAdvice;
 import com.github.gabert.arachna.trace.agent.bootstrap.PropagatingRunnable;
 import com.github.gabert.arachna.trace.agent.bootstrap.RequestContext;
 import com.github.gabert.arachna.trace.agent.recording.RequestRecorder;
-import com.github.gabert.arachna.trace.agent.session.SessionIdResolver;
+import com.github.gabert.arachna.trace.spi.session.SessionIdResolver;
 import com.github.gabert.arachna.trace.agent.spi.SpiBootstrap;
 import com.github.gabert.arachna.trace.recorder.buffer.UnboundedRecordBuffer;
-import com.github.gabert.arachna.trace.recorder.destination.RecordRenderer;
+import com.github.gabert.arachna.trace.renderer.RecordRenderer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -671,7 +671,7 @@ class ArachnaTraceAdviceRecordingTest {
     // ==================== HELPERS ====================
 
     private void configureAdvice(String agentArgs) throws Exception {
-        AgentConfig config = AgentConfig.getInstance(agentArgs);
+        AgentConfig config = AgentConfig.from(agentArgs);
         recorder = new RequestRecorder(buffer, config);
         ArachnaTraceAdvice.RECORDER = recorder;
     }

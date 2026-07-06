@@ -13,7 +13,7 @@ It is the load-bearing center of the system.
 | Module | Artifact | Holds |
 |---|---|---|
 | [`codec/`](codec/) | `ArachnaTraceCodec` | CBOR encode/decode, the envelope (object identity / cycle handling), `Hasher` (Merkle + own_hash content addressing), `AgentRun` (cross-platform per-process identity record + the seven canonical transport header names), and the binary wire-format record types (MS / ME / AR / AX / RE / etc.) plus their reader/writer. |
-| [`renderer/`](renderer/) | `ArachnaTraceRenderer` | `RecordRenderer` (binary records → tag-line text, decoding CBOR per value) and `RecordHashEnricher` (walks rendered JSON, injects `__meta__` blocks via Hasher). Used by both the file destination on the agent side and the processor on the server side — same code, two deployment paths. |
+| [`renderer/`](renderer/) | `ArachnaTraceRenderer` | `RecordRenderer` (typed records → tag-line text), `PayloadDecoder` (CBOR payload → readable JSON) and `RecordHashEnricher` (injects `__meta__` blocks via Hasher, per line or per payload JSON). Package `com.github.gabert.arachna.trace.renderer`. Used by both the file destination on the agent side and the processor on the server side — same code, two deployment paths. |
 | [`spi/session-resolver-api/`](spi/session-resolver-api/) | `SessionResolverApi` | Single interface: `SessionIdResolver`. Pure abstraction; zero deps. |
 | [`spi/jpa-proxy-resolver-api/`](spi/jpa-proxy-resolver-api/) | `JpaProxyResolverApi` | Single interface: `JpaProxyResolver`. Pure abstraction; zero deps. |
 
@@ -59,8 +59,8 @@ mental model:
 3. `codec/recorder/record/RecordType.java` + `RecordWriter.java` — the binary wire format
 4. `codec/Hasher.java` — Merkle + own_hash content addressing
 5. `codec/AgentRun.java` — the cross-platform identity record
-6. `renderer/RecordRenderer.java` — binary back to readable text
-7. `renderer/RecordHashEnricher.java` — adding `__meta__` to rendered JSON
+6. `renderer/RecordRenderer.java` + `renderer/PayloadDecoder.java` — binary back to readable text
+7. `renderer/RecordHashEnricher.java` — adding `__meta__` to payload JSON
 8. `spi/*-api/` — single interfaces; ~30 lines each
 
 Then jump to the spec at [`../spec/`](../spec/) to see the

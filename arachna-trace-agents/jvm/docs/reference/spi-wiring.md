@@ -92,7 +92,7 @@ your-app/src/main/java/com/example/spi/MdcSessionIdResolver.java
 ```java
 package com.example.spi;
 
-import com.github.gabert.arachna.trace.agent.session.SessionIdResolver;
+import com.github.gabert.arachna.trace.spi.session.SessionIdResolver;
 
 public class MdcSessionIdResolver implements SessionIdResolver {
     @Override public String name()    { return "mdc"; }
@@ -104,7 +104,7 @@ public class MdcSessionIdResolver implements SessionIdResolver {
 
 ```
 your-app/src/main/resources/META-INF/services/
-  com.github.gabert.arachna.trace.agent.session.SessionIdResolver
+  com.github.gabert.arachna.trace.spi.session.SessionIdResolver
 ```
 
 The **filename** is the interface's fully-qualified name. The
@@ -148,7 +148,7 @@ on top.
 3. On first hit, the agent calls
    `ServiceLoader.load(SessionIdResolver.class, contextClassloader)`.
 4. ServiceLoader walks every JAR on the classloader, looks for
-   `META-INF/services/com.github.gabert.arachna.trace.agent.session.SessionIdResolver`
+   `META-INF/services/com.github.gabert.arachna.trace.spi.session.SessionIdResolver`
    in each, and instantiates **every class listed in any such file** — across
    all jars combined.
 5. The agent walks the instantiated providers and picks the one whose
@@ -329,7 +329,7 @@ into your application's startup code (e.g. a `@PostConstruct` on a
 the CL hierarchy:
 
 ```java
-import com.github.gabert.arachna.trace.agent.session.SessionIdResolver;
+import com.github.gabert.arachna.trace.spi.session.SessionIdResolver;
 
 ClassLoader ctx = Thread.currentThread().getContextClassLoader();
 System.err.println("=== context CL chain ===");
@@ -427,7 +427,7 @@ docker exec <container> sh -c '
 ```bash
 docker exec <container> sh -c '
   cd /tmp/unpacked &&
-  cat META-INF/services/com.github.gabert.arachna.trace.agent.session.SessionIdResolver
+  cat META-INF/services/com.github.gabert.arachna.trace.spi.session.SessionIdResolver
   # Expect: a single line with your impl FQN, e.g. com.example.spi.MdcSessionIdResolver
 '
 ```
@@ -452,7 +452,7 @@ If (3) names a class that (4) doesn't find, you get
 
 ```
 java.util.ServiceConfigurationError:
-  com.github.gabert.arachna.trace.agent.session.SessionIdResolver:
+  com.github.gabert.arachna.trace.spi.session.SessionIdResolver:
   Provider com.example.spi.MdcSessionIdResolver not found
 ```
 

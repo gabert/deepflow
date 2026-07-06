@@ -46,7 +46,7 @@ class KafkaRecordConsumerTest {
 
     @Test
     void missingAgentRunIdReturnsNull() {
-        // ClickHouseSink uses null as the "drop this batch" signal. The
+        // KafkaRecordConsumer uses null as the "drop this batch" signal. The
         // contract: no run id, no metadata, no insert.
         Headers headers = new RecordHeaders()
                 .add(AgentRun.Headers.HOSTNAME, "host-a".getBytes(StandardCharsets.UTF_8));

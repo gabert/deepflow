@@ -1,6 +1,6 @@
 package com.github.gabert.arachna.trace.agent;
 
-import com.github.gabert.arachna.trace.agent.session.SessionIdResolver;
+import com.github.gabert.arachna.trace.spi.session.SessionIdResolver;
 import com.github.gabert.arachna.trace.agent.spi.SpiLoader;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +15,7 @@ class SessionIdResolverLoadingTest {
 
     @Test
     void middleProviderSelectedFromMultiple() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("session_resolver=test");
+        AgentConfig config = AgentConfig.from("session_resolver=test");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
         SessionIdResolver resolver = SpiLoader.loadSessionIdResolver(config, testClassLoader);
@@ -26,7 +26,7 @@ class SessionIdResolverLoadingTest {
 
     @Test
     void firstProviderSelectedFromMultiple() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("session_resolver=alpha");
+        AgentConfig config = AgentConfig.from("session_resolver=alpha");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
         SessionIdResolver resolver = SpiLoader.loadSessionIdResolver(config, testClassLoader);
@@ -37,7 +37,7 @@ class SessionIdResolverLoadingTest {
 
     @Test
     void lastProviderSelectedFromMultiple() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("session_resolver=gamma");
+        AgentConfig config = AgentConfig.from("session_resolver=gamma");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
         SessionIdResolver resolver = SpiLoader.loadSessionIdResolver(config, testClassLoader);
@@ -50,7 +50,7 @@ class SessionIdResolverLoadingTest {
 
     @Test
     void unmatchedNameFallsBackToNoop() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("session_resolver=nonexistent");
+        AgentConfig config = AgentConfig.from("session_resolver=nonexistent");
         ClassLoader testClassLoader = Thread.currentThread().getContextClassLoader();
 
         SessionIdResolver resolver = SpiLoader.loadSessionIdResolver(config, testClassLoader);
@@ -62,7 +62,7 @@ class SessionIdResolverLoadingTest {
 
     @Test
     void noConfigMeansNoopWithoutSpiLookup() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("");
+        AgentConfig config = AgentConfig.from("");
 
         SessionIdResolver resolver = SpiLoader.loadSessionIdResolver(config,
                 Thread.currentThread().getContextClassLoader());
@@ -74,7 +74,7 @@ class SessionIdResolverLoadingTest {
 
     @Test
     void noSpiOnClasspathFallsBackToNoop() throws IOException {
-        AgentConfig config = AgentConfig.getInstance("session_resolver=test");
+        AgentConfig config = AgentConfig.from("session_resolver=test");
         ClassLoader emptyClassLoader = new URLClassLoader(new java.net.URL[0], null);
 
         SessionIdResolver resolver = SpiLoader.loadSessionIdResolver(config, emptyClassLoader);

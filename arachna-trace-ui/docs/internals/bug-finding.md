@@ -149,7 +149,7 @@ session-list badges.
 
 ### Prerequisite: agent must emit AX
 
-The default `emit_tags` (`AgentConfig.DEFAULT_EMIT_TAGS`) does
+The default `emit_tags` (`ConfigLoader.DEFAULT_EMIT_TAGS`) does
 **not** include `AX`. The demo agent config
 (`release/configs/demo-agent.cfg`) has `emit_tags=...,AX,...`
 explicitly. Without AX, mutation detection falls back to

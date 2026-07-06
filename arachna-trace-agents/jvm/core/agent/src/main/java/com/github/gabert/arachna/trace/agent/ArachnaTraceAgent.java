@@ -30,6 +30,9 @@ public class ArachnaTraceAgent {
     private static final String AGENT_RECORDER_EXCLUDE_PACKAGE = "com.github.gabert.arachna.trace.recorder";
     private static final String AGENT_CODEC_EXCLUDE_PACKAGE = "com.github.gabert.arachna.trace.codec";
     private static final String AGENT_SHADED_EXCLUDE_PACKAGE = "com.github.gabert.arachna.trace.shaded";
+    // SPI APIs + resolver impls run inside the recording path (session lookup,
+    // proxy unwrap during serialization) — instrumenting them would recurse.
+    private static final String AGENT_SPI_EXCLUDE_PACKAGE = "com.github.gabert.arachna.trace.spi";
 
     public static void premain(String agentArgs,
                                Instrumentation instrumentation) {
@@ -37,7 +40,7 @@ public class ArachnaTraceAgent {
         AgentConfig agentConfig;
 
         try {
-            agentConfig = AgentConfig.getInstance(agentArgs);
+            agentConfig = AgentConfig.from(agentArgs);
         } catch (Exception e) {
             System.err.println("[ArachnaTrace] Failed to load agent config. Agent disabled.");
             e.printStackTrace();
@@ -81,6 +84,7 @@ public class ArachnaTraceAgent {
                         .or(ElementMatchers.nameStartsWith(AGENT_RECORDER_EXCLUDE_PACKAGE))
                         .or(ElementMatchers.nameStartsWith(AGENT_CODEC_EXCLUDE_PACKAGE))
                         .or(ElementMatchers.nameStartsWith(AGENT_SHADED_EXCLUDE_PACKAGE))
+                        .or(ElementMatchers.nameStartsWith(AGENT_SPI_EXCLUDE_PACKAGE))
                         .or(ElementMatchers.nameContains("$$"));
 
         new AgentBuilder.Default()

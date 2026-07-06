@@ -10,8 +10,7 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.ser.ContextualSerializer;
 import com.fasterxml.jackson.databind.ser.ResolvableSerializer;
-import com.github.gabert.arachna.trace.codec.Codec;
-import com.github.gabert.arachna.trace.jpaproxy.JpaProxyResolver;
+import com.github.gabert.arachna.trace.spi.jpaproxy.JpaProxyResolver;
 
 // ─────────────────────────────────────────────────────────────
 // EnvelopeSerializer
@@ -133,7 +132,7 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
       // If a JpaProxyResolver is configured, give it first shot at
       // unwrapping the object. This handles both entity proxies
       // (HibernateProxy) and collection wrappers (PersistentBag).
-      JpaProxyResolver resolver = Codec.getJpaProxyResolver();
+      JpaProxyResolver resolver = JpaProxyResolvers.active();
       if (resolver != null) {
          Object resolved = resolver.resolve(value);
          if (resolved != null) {
@@ -187,11 +186,14 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
       gen.writeEndObject();
    }
 
+   // Bytecode-generated proxies carry synthetic name markers: CGLIB/ByteBuddy
+   // use a double-dollar segment ("$$EnhancerByCGLIB$$", "$$SpringCGLIB$$"),
+   // Hibernate's ByteBuddy proxies use "$HibernateProxy$". A plain nested
+   // class that extends its enclosing class (Foo$Sub extends Foo) has a
+   // single-dollar name and must NOT be treated as a proxy.
    private static boolean isProxy(Class<?> cls) {
       if (Proxy.isProxyClass(cls)) return true;
-      Class<?> parent = cls.getSuperclass();
-      if (parent == null || parent == Object.class) return false;
-      return !cls.getName().equals(parent.getName())
-          && cls.getName().startsWith(parent.getName() + "$");
+      String name = cls.getName();
+      return name.contains("$$") || name.contains("$HibernateProxy$");
    }
 }

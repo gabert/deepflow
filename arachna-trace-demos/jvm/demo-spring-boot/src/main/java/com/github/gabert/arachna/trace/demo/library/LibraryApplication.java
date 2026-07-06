@@ -1,6 +1,6 @@
 package com.github.gabert.arachna.trace.demo.library;
 
-import com.github.gabert.arachna.trace.agent.session.spring.SessionIdFilter;
+import com.github.gabert.arachna.trace.spi.session.spring.SessionIdFilter;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;

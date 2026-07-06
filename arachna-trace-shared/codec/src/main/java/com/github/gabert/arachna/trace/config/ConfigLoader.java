@@ -21,6 +21,13 @@ import java.util.Set;
  */
 public final class ConfigLoader {
 
+    /**
+     * Default {@code emit_tags} value, shared by every component that filters
+     * tags (agent config, file destination). Single source of truth — the
+     * agent and the destinations must agree on what "default" means.
+     */
+    public static final String DEFAULT_EMIT_TAGS = "SI,TN,RI,TS,CL,TI,AR,RT,RE,TE,SQ";
+
     private ConfigLoader() {}
 
     /** Parse a single string of {@code key=value} pairs separated by {@code &}. */

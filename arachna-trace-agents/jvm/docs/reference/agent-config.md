@@ -153,10 +153,15 @@ setting — the processor uses them to pair MS↔ME and link the call
 tree without stack reconstruction. Filtering them out only
 suppresses them from the rendered `.dft` text.
 
+Exceptions are likewise always recorded on the wire, even when `RT`
+and `RE` are filtered — an exceptional exit must never be stored as
+`VOID`. Filtering `RT`/`RE` only skips serializing normal return
+values (and suppresses the rendered lines).
+
 See [Trace Format](../../../../spec/TAGS.md) for tag descriptions.
 
 ```properties
-# Default — matches AgentConfig.DEFAULT_EMIT_TAGS:
+# Default — matches ConfigLoader.DEFAULT_EMIT_TAGS:
 emit_tags=SI,TN,RI,TS,CL,TI,AR,RT,RE,TE,SQ
 
 # Mutation detection mode (add AX to see args before and after):
@@ -293,4 +298,17 @@ Default: `65536` (64 KB).
 
 ```properties
 http_flush_threshold=65536
+```
+
+### http_buffer_max_bytes
+
+Cap on bytes retained for retry by the HTTP destination. Unsent records are
+kept in memory while the collector is unreachable; when the backlog exceeds
+this cap it is dropped (with an error log) so the agent never grows the host
+application's heap without bound.
+
+Default: `33554432` (32 MB).
+
+```properties
+http_buffer_max_bytes=33554432
 ```

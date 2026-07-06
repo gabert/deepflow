@@ -13,7 +13,7 @@ records to a configured destination (see [serializer.md](serializer.md)).
 ```
 JVM loads -javaagent
   -> ArachnaTraceAgent.premain(agentArgs, instrumentation)
-    1. AgentConfig.getInstance(agentArgs)        Parse config file + CLI args
+    1. AgentConfig.from(agentArgs)        Parse config file + CLI args
     2. IF propagate_request_id:
          injectBootstrapClasses()                Inject RequestContext + wrappers
                                                  into the bootstrap classloader
@@ -146,7 +146,7 @@ implementations.
   returns non-null (falls back to noop).
 - `SpiBootstrap.initJpaProxyResolverOnce()` — double-checked locking;
   on first call, loads the named `JpaProxyResolver` (if any) and
-  registers it with `Codec.setJpaProxyResolver()`. Idempotent.
+  registers it with `JpaProxyResolvers.setActive()`. Idempotent.
 
 Loading uses the thread's context classloader, falling back to the
 system classloader.

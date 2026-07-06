@@ -1,8 +1,8 @@
 package com.github.gabert.arachna.trace.agent.spi;
 
 import com.github.gabert.arachna.trace.agent.AgentConfig;
-import com.github.gabert.arachna.trace.agent.session.SessionIdResolver;
-import com.github.gabert.arachna.trace.jpaproxy.JpaProxyResolver;
+import com.github.gabert.arachna.trace.spi.session.SessionIdResolver;
+import com.github.gabert.arachna.trace.spi.jpaproxy.JpaProxyResolver;
 
 import java.util.ServiceLoader;
 import java.util.function.Function;

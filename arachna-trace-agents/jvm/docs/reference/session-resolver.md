@@ -7,7 +7,7 @@ ID, debug run, or any other correlation key.
 ## Interface
 
 ```java
-package com.github.gabert.arachna.trace.agent.session;
+package com.github.gabert.arachna.trace.spi.session;
 
 import java.util.Map;
 
@@ -131,7 +131,7 @@ session_resolver=spring-session
 1. Implement `SessionIdResolver`
 2. Register via ServiceLoader:
    ```
-   META-INF/services/com.github.gabert.arachna.trace.agent.session.SessionIdResolver
+   META-INF/services/com.github.gabert.arachna.trace.spi.session.SessionIdResolver
    ```
 3. Place JAR on the application classpath (not in the agent JAR)
 4. Set `session_resolver=<your-name>` in config

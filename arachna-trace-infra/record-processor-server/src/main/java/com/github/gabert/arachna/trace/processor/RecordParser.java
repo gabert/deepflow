@@ -1,6 +1,17 @@
 package com.github.gabert.arachna.trace.processor;
 
-import com.github.gabert.arachna.trace.recorder.destination.RecordRenderer.Result;
+import com.github.gabert.arachna.trace.recorder.record.ArgumentsExitRecord;
+import com.github.gabert.arachna.trace.recorder.record.ArgumentsRecord;
+import com.github.gabert.arachna.trace.recorder.record.ExceptionRecord;
+import com.github.gabert.arachna.trace.recorder.record.MethodEndRecord;
+import com.github.gabert.arachna.trace.recorder.record.MethodStartRecord;
+import com.github.gabert.arachna.trace.recorder.record.ReturnRecord;
+import com.github.gabert.arachna.trace.recorder.record.SequenceRecord;
+import com.github.gabert.arachna.trace.recorder.record.ThisInstanceRecord;
+import com.github.gabert.arachna.trace.recorder.record.ThisInstanceRefRecord;
+import com.github.gabert.arachna.trace.recorder.record.TraceRecord;
+import com.github.gabert.arachna.trace.renderer.PayloadDecoder;
+import com.github.gabert.arachna.trace.renderer.RecordHashEnricher;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -10,58 +21,43 @@ import java.util.UUID;
 import java.util.function.LongSupplier;
 
 /**
- * Walks a rendered (and hash-enriched) {@link Result} line stream and pairs
- * up {@code TS}/{@code TE} markers via the wire-carried {@code call_id} UUID
- * (tag {@code CI}) to emit one {@link ParsedCall} per method invocation.
+ * Walks a typed {@link TraceRecord} stream and pairs up
+ * {@link MethodStartRecord}/{@link MethodEndRecord} via the wire-carried
+ * {@code call_id} UUID to emit one {@link ParsedCall} per method invocation.
+ * Value payloads (TI/AR/AX/RE) are decoded from CBOR to readable JSON via
+ * {@link PayloadDecoder} and hash-enriched via {@link RecordHashEnricher}
+ * as they are attached.
  *
- * <h2>Why stateful and UUID-keyed (vs the old per-batch stack)</h2>
+ * <h2>Why stateful and UUID-keyed (vs a per-batch stack)</h2>
  *
- * <p>The previous implementation used a method-local stack to pair {@code TS}
- * with {@code TE} by ordering. That had a latent bug: a request whose root
- * {@code TS} arrived in poll N and root {@code TE} in poll N+1 was silently
- * dropped (the in-flight builder sat in the local stack and was discarded
- * when {@code parse()} returned). Multi-thread interleaving in one batch
- * also pretended to share one stack, mispairing across threads.</p>
- *
- * <p>This implementation instead keys open calls by their UUID
- * ({@link UUID}, on the wire as {@code CI}). State persists across
- * {@code parse()} calls in {@link #openCalls}, so a {@code TE} can
- * find its matching {@code TS} no matter which batch each lived in.
- * Multi-thread interleaving in one batch is also correct because every
- * call is uniquely addressable by id.</p>
+ * <p>A stack-based pairer had a latent bug: a request whose root MS arrived
+ * in poll N and root ME in poll N+1 was silently dropped, and multi-thread
+ * interleaving in one batch pretended to share one stack. Open calls are
+ * instead keyed by their UUID in {@link #openCalls}; state persists across
+ * {@code parse()} calls, so an ME finds its MS no matter which batch each
+ * lived in, and every call is uniquely addressable by id.</p>
  *
  * <h2>Wire ordering this code handles</h2>
  *
- * <p>For one method invocation, the renderer emits tags in this rough order:
+ * <p>Record frames for one logical event are contiguous in the byte stream
+ * (the agent enqueues each entry/exit as one concatenated blob):
  * <pre>
- *   MS record -> TS, [SI], MS, TN, RI, CL, [CI], [PI]
- *   TI/AR     -> TI, AR
- *   ME record -> TE, TN, RI, [CI]
- *   RT/RE     -> RT, [RE]
- *   AX (opt)  -> AX
+ *   entry -> METHOD_START, [SEQUENCE], [THIS_INSTANCE|THIS_INSTANCE_REF], [ARGUMENTS]
+ *   exit  -> METHOD_END, RETURN|EXCEPTION, [ARGUMENTS_EXIT]
  * </pre>
- * The agent emits the exit records in the order METHOD_END, RETURN,
- * ARGUMENTS_EXIT, so on the wire {@code TE} comes <em>before</em> the call's
- * own {@code RT}/{@code RE}/{@code AX}. After {@code TE}, the parser stays in
- * "exit context" until the next {@code TS} or {@code TE}.</p>
+ * So the parser keeps an "entry context" (the last MS's builder, receiving
+ * TI/AR) and an "exit context" (the last ME's builder, receiving RT/RE/AX)
+ * until the next MS or ME arrives.</p>
  *
- * <h2>Lifecycle</h2>
+ * <h2>Lifecycle and TTL eviction</h2>
  *
- * <p>One instance per {@code ClickHouseSink} (or any owner). State accumulates
- * across {@code parse()} calls — open calls live in {@link #openCalls} until
- * their matching {@code TE} or until TTL eviction reaps them (an MS without
- * an ME means the agent crashed mid-call; the entry would otherwise leak
- * forever).</p>
- *
- * <h2>TTL eviction</h2>
- *
- * <p>At the end of every {@code parse()} call we sweep entries whose
- * processor-side admission time is older than {@link #OPEN_CALL_TTL_MS}.
- * The sweep itself is throttled to {@link #SWEEP_INTERVAL_MS} so the cost
- * is amortised across many batches. The clock is injectable for tests.
- * Both knobs are deliberately hard-coded — the TTL is loose enough
- * (10 minutes) to be safely above any plausible real-world method
- * duration, and the sweep cadence is decoupled from real-time pressure.</p>
+ * <p>One instance per {@code ClickHouseSink} (or any owner). Open calls live
+ * in {@link #openCalls} until their matching ME or until TTL eviction reaps
+ * them (an MS without an ME means the agent crashed mid-call; the entry would
+ * otherwise leak forever). The sweep runs at the end of {@code parse()} and
+ * is throttled to {@link #SWEEP_INTERVAL_MS}. The clock is injectable for
+ * tests. Both knobs are deliberately hard-coded — the TTL is loose enough
+ * (10 minutes) to be safely above any plausible real-world method duration.</p>
  */
 public final class RecordParser {
 
@@ -74,14 +70,10 @@ public final class RecordParser {
     private final LongSupplier clock;
     private long nextSweepAt;
 
-    /** Builder currently accumulating tags from an MS record (entry context). */
+    /** Builder currently accumulating payloads from an MS record (entry context). */
     private Builder currentEntry;
 
-    /** Set after {@code TE} until {@code CI} resolves which call exited. */
-    private boolean awaitingExitCallId;
-    private long pendingTsOut;
-
-    /** Builder accumulating tags from an ME record (exit context, post-CI). */
+    /** Builder accumulating RT/RE/AX from an ME record (exit context). */
     private Builder currentExit;
 
     public RecordParser() {
@@ -93,115 +85,101 @@ public final class RecordParser {
         this.clock = clock;
     }
 
-    public List<ParsedCall> parse(Result result) {
+    public List<ParsedCall> parse(List<TraceRecord> records) {
         List<ParsedCall> completed = new ArrayList<>();
 
-        for (String line : result.lines()) {
-            int sep = line.indexOf(';');
-            if (sep < 0) continue;
-            String tag = line.substring(0, sep);
-            String value = line.substring(sep + 1);
-
-            switch (tag) {
-                case "VR" -> { /* wire-format version banner — not modeled */ }
-
-                case "TS" -> {
-                    flushExitIfAny(completed);
-                    currentEntry = new Builder(clock.getAsLong());
-                    currentEntry.tsIn = parseLongOrZero(value);
+        for (TraceRecord record : records) {
+            if (record instanceof MethodStartRecord ms) {
+                onMethodStart(ms, completed);
+            } else if (record instanceof MethodEndRecord me) {
+                onMethodEnd(me, completed);
+            } else if (record instanceof SequenceRecord sq) {
+                onSequence(sq);
+            } else if (record instanceof ThisInstanceRecord ti) {
+                if (currentEntry != null) {
+                    currentEntry.thisJson = enrich(PayloadDecoder.toJson(ti.cbor()));
                 }
-
-                case "TE" -> {
-                    flushExitIfAny(completed);
-                    // We don't yet know which call this TE belongs to —
-                    // its CI tag will follow in the same ME record.
-                    awaitingExitCallId = true;
-                    pendingTsOut = parseLongOrZero(value);
-                    currentEntry = null;
+            } else if (record instanceof ThisInstanceRefRecord ref) {
+                if (currentEntry != null) {
+                    currentEntry.thisIdRef = ref.objectId();
                 }
-
-                case "CI" -> {
-                    UUID callId = parseUuidOrNull(value);
-                    if (callId == null) break;
-                    if (currentEntry != null) {
-                        // Entry's call_id — index the builder so we can find it on TE.
-                        // Defensive: if a malformed MS block ever emits two CIs, ignore
-                        // the second so we don't leak the first builder under a stale key.
-                        if (currentEntry.callId != null) break;
-                        currentEntry.callId = callId;
-                        openCalls.put(callId, currentEntry);
-                        // currentEntry stays so subsequent TI/AR still apply.
-                    } else if (awaitingExitCallId) {
-                        Builder b = openCalls.remove(callId);
-                        awaitingExitCallId = false;
-                        if (b != null) {
-                            b.tsOut = pendingTsOut;
-                            currentExit = b;
-                        }
-                        // Else orphan ME — entry never recorded (failed-entry contract
-                        // in RequestRecorder). No matching MS exists, so nothing to pair.
+            } else if (record instanceof ArgumentsRecord ar) {
+                if (currentEntry != null) {
+                    currentEntry.argsJson = enrich(PayloadDecoder.argumentsToJson(ar.cbor()));
+                }
+            } else if (record instanceof ArgumentsExitRecord ax) {
+                if (currentExit != null) {
+                    currentExit.argsExitJson = enrich(PayloadDecoder.argumentsToJson(ax.cbor()));
+                }
+            } else if (record instanceof ReturnRecord rt) {
+                if (currentExit != null) {
+                    if (rt.isVoid()) {
+                        currentExit.returnType = "VOID";
+                    } else {
+                        currentExit.returnType = "VALUE";
+                        currentExit.returnJson = enrich(PayloadDecoder.toJson(rt.cbor()));
                     }
-                    // else: stray CI with no context — ignore.
                 }
-
-                case "PI" -> {
-                    if (currentEntry != null) currentEntry.parentCallId = parseUuidOrNull(value);
-                }
-
-                case "TN", "RI" -> {
-                    // Both MS and ME records emit these; route by current context.
-                    if (currentEntry != null) {
-                        apply(currentEntry, tag, value);
-                    } else if (currentExit != null) {
-                        apply(currentExit, tag, value);
-                    }
-                    // After TE before CI: would be a duplicate from ME — drop.
-                }
-
-                case "RT", "RE", "AX" -> {
-                    // Belong to the call that just hit TE.
-                    if (currentExit != null) apply(currentExit, tag, value);
-                }
-
-                case "SQ" -> {
-                    // SQ value is `<callId>|<seq>` — route by callId so it
-                    // pairs with its MS regardless of adjacency on the wire.
-                    int bar = value.indexOf('|');
-                    if (bar < 0) break;
-                    UUID seqCallId = parseUuidOrNull(value.substring(0, bar));
-                    if (seqCallId == null) break;
-                    // Bail on malformed seq instead of falling through to 0 —
-                    // otherwise a later malformed SQ for the same callId would
-                    // silently clobber an earlier valid seq.
-                    long seq;
-                    try { seq = Long.parseLong(value.substring(bar + 1)); }
-                    catch (NumberFormatException e) { break; }
-                    Builder b = openCalls.get(seqCallId);
-                    if (b == null && currentEntry != null
-                            && seqCallId.equals(currentEntry.callId)) {
-                        // Common path: SQ arrives in the same MS context, before
-                        // CI has indexed the builder (CI handler also indexes,
-                        // so this is a defensive fast-path).
-                        b = currentEntry;
-                    }
-                    if (b != null) b.seq = seq;
-                }
-
-                default -> {
-                    // SI, MS, CL, TI, AR — apply to entry context.
-                    if (currentEntry != null) apply(currentEntry, tag, value);
+            } else if (record instanceof ExceptionRecord ex) {
+                if (currentExit != null) {
+                    currentExit.returnType = "EXCEPTION";
+                    currentExit.returnJson = enrich(PayloadDecoder.toJson(ex.cbor()));
                 }
             }
+            // VersionRecord: wire-format banner — not modeled.
         }
 
-        // End of batch: flush any in-progress exit. A currentEntry that hasn't
-        // seen CI yet stays in this.currentEntry for the next batch — its
-        // remaining tags may arrive later.
+        // End of batch: flush any in-progress exit. An open entry stays in
+        // openCalls for the next batch — its ME may arrive later.
         flushExitIfAny(completed);
+        currentEntry = null;
+        currentExit = null;
 
         evictStaleOpenCalls();
 
         return completed;
+    }
+
+    private void onMethodStart(MethodStartRecord ms, List<ParsedCall> completed) {
+        flushExitIfAny(completed);
+        Builder b = new Builder(clock.getAsLong());
+        b.callId = ms.callId();
+        b.parentCallId = ms.parentCallId();
+        b.sessionId = ms.sessionId();
+        b.requestId = ms.requestId();
+        b.threadName = ms.threadName();
+        b.tsIn = ms.timestamp();
+        b.signature = ms.signature();
+        b.callerLine = ms.callerLine();
+        currentEntry = b;
+        if (b.callId != null) {
+            openCalls.put(b.callId, b);
+        }
+        // A callId-less MS (agent misbehavior) can never be paired with its
+        // ME — it lives only as the current entry context and is discarded
+        // at the next MS/ME.
+    }
+
+    private void onMethodEnd(MethodEndRecord me, List<ParsedCall> completed) {
+        flushExitIfAny(completed);
+        currentEntry = null;
+        Builder b = me.callId() != null ? openCalls.remove(me.callId()) : null;
+        if (b != null) {
+            b.tsOut = me.timestamp();
+            currentExit = b;
+        }
+        // Else orphan ME — entry never recorded (failed-entry contract in
+        // RequestRecorder) or already TTL-evicted. Nothing to pair.
+    }
+
+    private void onSequence(SequenceRecord sq) {
+        if (sq.callId() == null) return;
+        Builder b = openCalls.get(sq.callId());
+        if (b != null) {
+            b.seq = sq.seq();
+        }
+        // SQ is emitted inside the entry blob, so its call is always still
+        // open; an SQ for an unknown call is a stray and is dropped.
     }
 
     private void flushExitIfAny(List<ParsedCall> completed) {
@@ -224,50 +202,8 @@ public final class RecordParser {
         return openCalls.size();
     }
 
-    private static void apply(Builder b, String tag, String value) {
-        switch (tag) {
-            case "MS" -> b.signature = value;
-            case "SI" -> b.sessionId = value;
-            case "TN" -> b.threadName = value;
-            case "RI" -> b.requestId = parseLongOrZero(value);
-            case "CL" -> b.callerLine = parseIntOrZero(value);
-            case "TI" -> setThis(b, value);
-            case "AR" -> b.argsJson = value;
-            case "AX" -> b.argsExitJson = value;
-            case "RT" -> b.returnType = value;
-            case "RE" -> b.returnJson = value;
-            // unknown tag — drop
-        }
-    }
-
-    private static void setThis(Builder b, String value) {
-        if (looksLikeJson(value)) {
-            b.thisJson = value;
-        } else {
-            try {
-                b.thisIdRef = Long.parseLong(value);
-            } catch (NumberFormatException ignored) {
-                // unreadable — leave null
-            }
-        }
-    }
-
-    private static boolean looksLikeJson(String v) {
-        if (v.isEmpty()) return false;
-        char c = v.charAt(0);
-        return c == '{' || c == '[';
-    }
-
-    private static long parseLongOrZero(String s) {
-        try { return Long.parseLong(s); } catch (NumberFormatException e) { return 0L; }
-    }
-
-    private static int parseIntOrZero(String s) {
-        try { return Integer.parseInt(s); } catch (NumberFormatException e) { return 0; }
-    }
-
-    private static UUID parseUuidOrNull(String s) {
-        try { return UUID.fromString(s); } catch (IllegalArgumentException e) { return null; }
+    private static String enrich(String json) {
+        return RecordHashEnricher.enrichJson(json);
     }
 
     private static final class Builder {

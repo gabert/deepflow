@@ -2,7 +2,6 @@ package com.github.gabert.arachna.trace.processor;
 
 import com.github.gabert.arachna.trace.codec.AgentRun;
 import com.github.gabert.arachna.trace.codec.Hasher;
-import com.github.gabert.arachna.trace.recorder.destination.RecordRenderer.Result;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Unit tests for {@link ClickHouseSink}. The sink talks to ClickHouse over
  * HTTP in production; here we test pure logic only by:
  * <ul>
- *   <li>overriding {@link ClickHouseSink#flushLocked()} to a no-op so the
+ *   <li>overriding {@link ClickHouseSink#flush()} to a no-op so the
  *       periodic flusher does not clear buffers under the test's feet, and</li>
  *   <li>asserting buffer state via the package-private accessors (mirroring
  *       the openCallCount() pattern used by RecordParser).</li>
@@ -53,29 +52,21 @@ class ClickHouseSinkTest {
     }
 
     // ============================================================
-    //  accept() — null metadata is the "drop this batch" signal
+    //  accept() — agent-run row buffering, deduped per run id
     // ============================================================
 
     @Test
-    void acceptDropsBatchWhenAgentRunIsNull() {
-        Result rendered = new Result("t", List.of(
-                "TS;1000", "MS;F.f()V", "TN;t", "RI;1", "CL;1", "CI;" + CALL_ID,
-                "TE;1100", "TN;t", "RI;1", "CI;" + CALL_ID, "RT;VOID"));
+    void acceptBuffersOneAgentRunRowPerDistinctRunId() {
+        // A run spanning many batches buffers one row per flush window;
+        // ReplacingMergeTree collapses re-emits across flushes/restarts.
+        sink.accept(List.of(), agentRun(RUN_ID));
+        sink.accept(List.of(), agentRun(RUN_ID));
+        assertEquals(1, sink.agentRunBufferSize(),
+                "same run id across batches must not multiply rows");
 
-        sink.accept(rendered, null);
-
-        assertEquals(0, sink.callBufferSize(), "no call rows added without metadata");
-        assertEquals(0, sink.payloadBufferSize(), "no payload rows added without metadata");
-        assertEquals(0, sink.agentRunBufferSize(), "no agent_run row added without metadata");
-        assertEquals(0, sink.sessionBufferSize(), "no session row added without metadata");
-    }
-
-    @Test
-    void acceptWithMetadataBuffersOneAgentRunRowPerBatch() {
-        // ReplacingMergeTree collapses duplicates server-side, so cheap upsert
-        // every batch is intentional. Test that we always emit one row.
-        sink.accept(emptyResult(), agentRun(RUN_ID));
-        assertEquals(1, sink.agentRunBufferSize());
+        sink.accept(List.of(), agentRun(OTHER_RUN_ID));
+        assertEquals(2, sink.agentRunBufferSize(),
+                "a different run id buffers its own row");
     }
 
     // ============================================================
@@ -270,10 +261,6 @@ class ClickHouseSinkTest {
     //  Fixtures
     // ============================================================
 
-    private static Result emptyResult() {
-        return new Result("t", List.of());
-    }
-
     private static AgentRun agentRun(UUID runId) {
         return new AgentRun(runId, "host", "0.0.3", null, null, 0L, 0L);
     }
@@ -321,6 +308,6 @@ class ClickHouseSinkTest {
     static final class TestSink extends ClickHouseSink {
         TestSink(ProcessorConfig config) { super(config); }
         @Override
-        void flushLocked() { /* no-op: tests inspect buffers, never flush */ }
+        void flush() { /* no-op: tests inspect buffers, never flush */ }
     }
 }

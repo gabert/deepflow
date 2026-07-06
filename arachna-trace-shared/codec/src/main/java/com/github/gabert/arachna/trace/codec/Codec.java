@@ -14,11 +14,9 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 import com.github.gabert.arachna.trace.codec.envelope.EnvelopeModule;
 import com.github.gabert.arachna.trace.codec.envelope.FieldIds;
-import com.github.gabert.arachna.trace.jpaproxy.JpaProxyResolver;
 
 public final class Codec {
 
-   private static volatile JpaProxyResolver jpaProxyResolver;
    private static final ObjectMapper CBOR_ENCODER;
    private static final ObjectMapper CBOR_DECODER;
    private static final ObjectMapper JSON_MAPPER;
@@ -34,14 +32,6 @@ public final class Codec {
    }
 
    private Codec() {
-   }
-
-   public static void setJpaProxyResolver(JpaProxyResolver resolver) {
-      jpaProxyResolver = resolver;
-   }
-
-   public static JpaProxyResolver getJpaProxyResolver() {
-      return jpaProxyResolver;
    }
 
    /**

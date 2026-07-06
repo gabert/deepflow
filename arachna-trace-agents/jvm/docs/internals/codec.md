@@ -44,7 +44,7 @@ which:
 3. Detects already-seen instances within the current top-level encode
    call via an `IdentityHashMap`; emits a cycle reference instead of
    recursing.
-4. Asks `Codec.getJpaProxyResolver()` whether the value is an
+4. Asks `JpaProxyResolvers.active()` whether the value is an
    unwrappable proxy (see below) -- if so, continues with the unwrapped
    object.
 5. Falls through to Jackson's default field-by-field serialization for
@@ -66,7 +66,7 @@ on each value, so the envelope captures the actual runtime
 
 ## JPA proxy integration
 
-The codec exposes a static slot, `Codec.setJpaProxyResolver(...)`,
+The codec exposes a static slot, `JpaProxyResolvers.setActive(...)`,
 that the agent populates on first instrumented method entry from the
 `JpaProxyResolver` SPI (see [SPI docs](../reference/jpa-proxy-resolver.md)).
 

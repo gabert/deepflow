@@ -3,7 +3,7 @@ package com.github.gabert.arachna.trace.processor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.gabert.arachna.trace.codec.AgentRun;
 import com.github.gabert.arachna.trace.codec.Hasher;
-import com.github.gabert.arachna.trace.recorder.destination.RecordRenderer.Result;
+import com.github.gabert.arachna.trace.recorder.record.TraceRecord;
 
 import java.io.IOException;
 import java.net.URI;
@@ -71,7 +71,12 @@ public class ClickHouseSink implements RecordSink {
     private final Object lock = new Object();
     private final List<Map<String, Object>> callBuffer = new ArrayList<>();
     private final List<Map<String, Object>> payloadBuffer = new ArrayList<>();
-    private final List<Map<String, Object>> agentRunBuffer = new ArrayList<>();
+    /**
+     * Agent-run rows pending insert, keyed by run id — one row per distinct
+     * run between flushes, however many batches it spans. ReplacingMergeTree
+     * collapses re-emits across flushes and processor restarts.
+     */
+    private final Map<UUID, Map<String, Object>> agentRunBuffer = new LinkedHashMap<>();
     private final List<Map<String, Object>> sessionBuffer = new ArrayList<>();
 
     /**
@@ -116,29 +121,20 @@ public class ClickHouseSink implements RecordSink {
     }
 
     @Override
-    public void accept(Result result, AgentRun headerMetadata) {
-        if (headerMetadata == null) {
-            // Agent-run identity travels at the transport layer (Kafka headers).
-            // A batch without it is malformed — almost certainly a misconfigured
-            // producer. We cannot attribute the calls, so drop the batch and
-            // surface the error operationally.
-            System.err.println("[ArachnaTrace] Dropping batch: missing agent-run headers ("
-                    + AGENT_RUN_HEADER_HINT + ")");
-            return;
-        }
-
+    public void accept(List<TraceRecord> records, AgentRun agentRun) {
+        boolean thresholdReached;
         synchronized (lock) {
             // The parser is stateful; serialize parsing and row-buffering under
             // the same lock so its open-calls map mutations are well-ordered
-            // with respect to the flusher thread (which only reads the buffers).
-            List<ParsedCall> calls = parser.parse(result);
+            // with respect to the flusher thread.
+            List<ParsedCall> calls = parser.parse(records);
 
-            // Authoritative source: transport-layer metadata. ReplacingMergeTree
-            // collapses repeated upserts of the same agent_run_id, so adding
-            // one row per batch is cheap and survives processor restarts.
-            agentRunBuffer.add(agentRunRow(headerMetadata));
+            // Authoritative source: transport-layer metadata. Keyed by run id
+            // so a run spanning many batches buffers a single row per flush;
+            // ReplacingMergeTree collapses re-emits across flushes/restarts.
+            UUID runId = agentRun.agentRunId();
+            agentRunBuffer.putIfAbsent(runId, agentRunRow(agentRun));
 
-            UUID runId = headerMetadata.agentRunId();
             for (ParsedCall call : calls) {
                 addRows(call, runId);
                 noteSessionIfNew(call, runId);
@@ -147,15 +143,15 @@ public class ClickHouseSink implements RecordSink {
                 // requests rollup automatically.
             }
 
-            if (callBuffer.size() >= FLUSH_THRESHOLD || payloadBuffer.size() >= FLUSH_THRESHOLD) {
-                flushLocked();
-            }
+            thresholdReached = callBuffer.size() >= FLUSH_THRESHOLD
+                    || payloadBuffer.size() >= FLUSH_THRESHOLD;
+        }
+        // HTTP inserts happen outside the lock — a slow ClickHouse must not
+        // stall the Kafka poll loop's next accept() or the parser.
+        if (thresholdReached) {
+            flush();
         }
     }
-
-    private static final String AGENT_RUN_HEADER_HINT =
-            "expected " + AgentRun.Headers.AGENT_RUN_ID
-            + " on Kafka record headers";
 
     @Override
     public void close() {
@@ -165,23 +161,14 @@ public class ClickHouseSink implements RecordSink {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        synchronized (lock) {
-            flushLocked();
-        }
+        flush();
     }
 
     private void periodicFlush() {
         synchronized (lock) {
             evictStaleSessions();
-            if (anyBufferNonEmpty()) {
-                flushLocked();
-            }
         }
-    }
-
-    private boolean anyBufferNonEmpty() {
-        return !callBuffer.isEmpty() || !payloadBuffer.isEmpty()
-                || !agentRunBuffer.isEmpty() || !sessionBuffer.isEmpty();
+        flush();
     }
 
     void addRows(ParsedCall c, UUID effectiveRunId) {
@@ -296,7 +283,7 @@ public class ClickHouseSink implements RecordSink {
     List<Map<String, Object>> peekCalls()      { return List.copyOf(callBuffer); }
     List<Map<String, Object>> peekPayloads()   { return List.copyOf(payloadBuffer); }
     List<Map<String, Object>> peekSessions()   { return List.copyOf(sessionBuffer); }
-    List<Map<String, Object>> peekAgentRuns()  { return List.copyOf(agentRunBuffer); }
+    List<Map<String, Object>> peekAgentRuns()  { return List.copyOf(agentRunBuffer.values()); }
 
     private static String extractRootHash(String hashedJson) {
         try {
@@ -350,23 +337,28 @@ public class ClickHouseSink implements RecordSink {
         return s != null ? s : "";
     }
 
-    void flushLocked() {
-        if (!agentRunBuffer.isEmpty()) {
-            postJsonEachRow(insertAgentRunsUri, agentRunBuffer);
+    /**
+     * Snapshot-and-clear the row buffers under the lock, then POST outside it
+     * so ClickHouse latency never blocks {@link #accept}. Inserts are
+     * best-effort by design (see class javadoc): rows are dropped on failure,
+     * not re-queued.
+     */
+    void flush() {
+        List<Map<String, Object>> runs, sessions, calls, payloads;
+        synchronized (lock) {
+            runs = List.copyOf(agentRunBuffer.values());
+            sessions = List.copyOf(sessionBuffer);
+            calls = List.copyOf(callBuffer);
+            payloads = List.copyOf(payloadBuffer);
             agentRunBuffer.clear();
-        }
-        if (!sessionBuffer.isEmpty()) {
-            postJsonEachRow(insertSessionsUri, sessionBuffer);
             sessionBuffer.clear();
-        }
-        if (!callBuffer.isEmpty()) {
-            postJsonEachRow(insertCallsUri, callBuffer);
             callBuffer.clear();
-        }
-        if (!payloadBuffer.isEmpty()) {
-            postJsonEachRow(insertPayloadsUri, payloadBuffer);
             payloadBuffer.clear();
         }
+        if (!runs.isEmpty())     postJsonEachRow(insertAgentRunsUri, runs);
+        if (!sessions.isEmpty()) postJsonEachRow(insertSessionsUri, sessions);
+        if (!calls.isEmpty())    postJsonEachRow(insertCallsUri, calls);
+        if (!payloads.isEmpty()) postJsonEachRow(insertPayloadsUri, payloads);
     }
 
     private void postJsonEachRow(URI uri, List<Map<String, Object>> rows) {

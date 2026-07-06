@@ -11,7 +11,6 @@ import java.util.Set;
 
 
 public class AgentConfig {
-    private static final String DEFAULT_EMIT_TAGS = "SI,TN,RI,TS,CL,TI,AR,RT,RE,TE,SQ";
 
     private final List<String> matchersInclude;
     private final List<String> matchersExclude;
@@ -43,7 +42,7 @@ public class AgentConfig {
         this.parameterNames = Boolean.parseBoolean(configMap.getOrDefault("parameter_names", "true"));
         this.maxValueSize = Integer.parseInt(configMap.getOrDefault("max_value_size", "0"));
         this.destination = configMap.getOrDefault("destination", "file");
-        this.emitTags = ConfigLoader.parseEmitTags(configMap.get("emit_tags"), DEFAULT_EMIT_TAGS);
+        this.emitTags = ConfigLoader.parseEmitTags(configMap.get("emit_tags"), ConfigLoader.DEFAULT_EMIT_TAGS);
         this.codeVersion = configMap.get("code_version");
         this.env = configMap.get("env");
     }
@@ -120,7 +119,8 @@ public class AgentConfig {
         return configMap;
     }
 
-    public static AgentConfig getInstance(String agentArgs) throws IOException {
+    /** Parse the -javaagent argument string (and any config file it references) into a config. */
+    public static AgentConfig from(String agentArgs) throws IOException {
         Map<String, String> args = ConfigLoader.parseAgentArgs(agentArgs);
         return new AgentConfig(ConfigLoader.mergeWithFile(args));
     }

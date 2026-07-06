@@ -18,20 +18,21 @@ For each Kafka record:
 ```
 KafkaRecordConsumer.pollLoop()
   └─ processRecord(record)
-       ├─ RecordRenderer.render(record.value())     # CBOR → JSON per TI/AR/AX/RE value
-       ├─ RecordHashEnricher.enrich(rendered)       # walk JSON, inject __meta__
-       ├─ AgentRun.from(record.headers())   # X-Arachna-Trace-* → AgentRun
-       └─ sink.accept(enriched, headerMetadata)
+       ├─ extractAgentRun(record.headers())  # X-Arachna-Trace-* → AgentRun; null → drop batch
+       ├─ RecordReader.readAll(record.value())      # bytes → typed TraceRecords
+       └─ sink.accept(records, agentRun)
             └─ ClickHouseSink                       # buffered INSERT JSONEachRow
-                 ├─ RecordParser.parse(...)         # pair MS↔ME by call_id → ParsedCall
+                 ├─ RecordParser.parse(records)     # pair MS↔ME by call_id → ParsedCall;
+                 │                                  # per TI/AR/AX/RE payload: PayloadDecoder
+                 │                                  # (CBOR → JSON) + RecordHashEnricher (__meta__)
                  ├─ ObjectIdCollector.collect(...)  # walk hashed JSON → object_ids[]
                  ├─ ScalarTokenCollector.collect()  # walk hashed JSON → payload_tokens[]
-                 └─ flush() every 1 s or 500 rows
+                 └─ flush() every 1 s or 500 rows   # HTTP POST happens outside the buffer lock
 ```
 
-The renderer (`RecordRenderer`) and hash enricher
-(`RecordHashEnricher`) live in `core/serializer`, not the
-processor module — the file destination uses the same code to
+The payload decoding (`PayloadDecoder`) and hash enrichment
+(`RecordHashEnricher`) live in `arachna-trace-shared/renderer/`, not
+the processor module — the file destination uses the same code to
 produce `.dft` files. One implementation, two deployment paths.
 
 ## Entry point
@@ -66,8 +67,8 @@ then `consumer.close()` (closes the consumer and the sink).
 `extractAgentRun(record.headers())` lifts the seven
 `X-Arachna-Trace-*` Kafka headers (set by the collector) into an
 `AgentRun` record. A batch with a missing or unparseable
-`agent_run_id` header returns null `AgentRun`, and the
-sink drops it with an error log — see
+`agent_run_id` header returns null `AgentRun`, and the consumer
+drops it with an error log before any sink runs — see
 [../spec/TRANSPORT.md](../../../spec/TRANSPORT.md) for the rationale.
 
 ## Why stateful UUID-keyed pairing
@@ -105,14 +106,15 @@ fake clock past TTL and asserts `openCallCount()` drains.
 ### Exit-order quirk
 
 The agent emits exit records in this wire order: `METHOD_END`
-(carries `TE`, `TN`, `RI`, `CI`), then `RETURN` / `EXCEPTION` (the
-`RT` / `RE` payload), then `ARGUMENTS_EXIT` (the `AX` payload).
-So on the wire, `TE` comes **before** the call's own `RT` / `RE` /
-`AX`.
+(carries the exit timestamp and `call_id`), then `RETURN` /
+`EXCEPTION`, then `ARGUMENTS_EXIT`. So on the wire, the method-end
+frame comes **before** the call's own return/exception and exit-args
+frames.
 
-The parser tracks "exit context" after a `TE`: subsequent
-`RT` / `RE` / `AX` tags attach to the just-closed call's builder
-until the next `TS` or `TE` resets context.
+The parser tracks "exit context" after a `METHOD_END`: subsequent
+`RETURN` / `EXCEPTION` / `ARGUMENTS_EXIT` records attach to the
+just-closed call's builder until the next `METHOD_START` /
+`METHOD_END` resets context.
 
 ## ClickHouseSink
 
@@ -134,9 +136,11 @@ JSONEachRow` format.
   an evicted session produces one duplicate `sessions` row, which
   the `ReplacingMergeTree` engine collapses server-side. Sweep
   cadence: every 5 minutes, drop entries older than 1 hour.
-- **Agent-run upsert per batch**: every batch re-issues the
-  `agent_runs` row idempotently via `ReplacingMergeTree`. A single
-  CH-insert failure isn't fatal because the next batch retries it.
+- **Agent-run rows deduped by run id**: between flushes the sink
+  buffers at most one `agent_runs` row per distinct run id;
+  re-emits across flushes and restarts collapse server-side via
+  `ReplacingMergeTree`. A single CH-insert failure isn't fatal
+  because the next flush window re-issues it.
 
 The two columns derived at insert time:
 
@@ -153,8 +157,8 @@ The schema DDL is in `server/clickhouse-init/01-schema.sql`.
 
 ## Alternative sink: LoggingSink
 
-Opt-in via `sink_type=logging` in `ProcessorConfig`. Prints every
-`ParsedCall` to stdout. Used for end-to-end debugging when
+Opt-in via `sink_type=logging` in `ProcessorConfig`. Renders every
+batch to tag lines and prints them to stdout. Used for end-to-end debugging when
 ClickHouse isn't part of the loop — useful for testing the agent
 → collector → Kafka segment in isolation.
 
@@ -165,7 +169,7 @@ ClickHouse isn't part of the loop — useful for testing the agent
 - `RecordProcessorServer.java` — entry point, wires the sink
 - `ProcessorConfig.java` — Kafka config + sink_type
 - `KafkaRecordConsumer.java` — poll loop, header extraction
-- `RecordSink.java` — `accept(Result, AgentRun)` interface
+- `RecordSink.java` — `accept(List<TraceRecord>, AgentRun)` interface
 - `ClickHouseSink.java` — buffered HTTP inserts, periodic flush
 - `LoggingSink.java` — stdout sink, opt-in
 - `RecordParser.java` — UUID-keyed `MS`↔`ME` pairer with TTL

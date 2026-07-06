@@ -1,6 +1,6 @@
 package com.github.gabert.arachna.trace.agent;
 
-import com.github.gabert.arachna.trace.agent.session.SessionIdResolver;
+import com.github.gabert.arachna.trace.spi.session.SessionIdResolver;
 
 public class TestSessionIdResolver implements SessionIdResolver {
 

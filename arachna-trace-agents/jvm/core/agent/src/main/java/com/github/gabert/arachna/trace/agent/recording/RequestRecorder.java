@@ -62,6 +62,7 @@ public class RequestRecorder {
         // RT and RE are written as a single byte-record (RT is the record-type
         // byte, RE is the optional payload). The renderer trims to whichever
         // tags are configured, so we only need to know whether either is wanted.
+        // Exceptions ignore this flag entirely — see recordExit.
         this.emitReturnRecord = config.shouldEmit("RT") || config.shouldEmit("RE");
         this.emitAx = config.shouldEmit("AX");
         this.emitSq = config.shouldEmit("SQ");
@@ -142,7 +143,7 @@ public class RequestRecorder {
             if (depthIncremented) {
                 RequestContext.endRequest();
             }
-            System.err.println("Error recording entry.");
+            System.err.println("[ArachnaTrace] Error recording entry.");
             t.printStackTrace();
             return false;
         }
@@ -182,10 +183,13 @@ public class RequestRecorder {
                         : null;
 
                 byte[] returnRecord;
-                if (!emitReturnRecord) {
-                    returnRecord = RecordWriter.returnVoid();
-                } else if (throwable != null) {
+                if (throwable != null) {
+                    // Exceptions are recorded regardless of emit_tags: RT is the
+                    // structural source of is_exception downstream, and filtering
+                    // a display tag must not turn an exceptional exit into VOID.
                     returnRecord = RecordWriter.exception(valueEncoder.encode(buildExceptionData(throwable)));
+                } else if (!emitReturnRecord) {
+                    returnRecord = RecordWriter.returnVoid();
                 } else {
                     boolean isVoid = Void.TYPE.equals(method.getGenericReturnType());
                     returnRecord = isVoid
@@ -204,7 +208,7 @@ public class RequestRecorder {
             }
             recordBuffer.offer(record);
         } catch (Throwable t) {
-            System.err.println("Error recording exit.");
+            System.err.println("[ArachnaTrace] Error recording exit.");
             t.printStackTrace();
         }
     }

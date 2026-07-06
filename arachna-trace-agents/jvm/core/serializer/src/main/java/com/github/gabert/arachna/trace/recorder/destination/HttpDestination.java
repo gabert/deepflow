@@ -13,11 +13,13 @@ import java.time.Duration;
 
 public class HttpDestination implements Destination {
     private static final int DEFAULT_FLUSH_THRESHOLD = 64 * 1024;
+    private static final int DEFAULT_BUFFER_MAX_BYTES = 32 * 1024 * 1024;
     private static final String DEFAULT_SERVER_URL = "http://localhost:8099/records";
 
     private final HttpClient httpClient;
     private final URI serverUri;
     private final int flushThreshold;
+    private final int bufferMaxBytes;
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     private volatile AgentRun agentRun;
 
@@ -26,6 +28,8 @@ public class HttpDestination implements Destination {
         this.serverUri = URI.create(url);
         this.flushThreshold = Integer.parseInt(
                 config.getOrDefault("http_flush_threshold", String.valueOf(DEFAULT_FLUSH_THRESHOLD)));
+        this.bufferMaxBytes = Integer.parseInt(
+                config.getOrDefault("http_buffer_max_bytes", String.valueOf(DEFAULT_BUFFER_MAX_BYTES)));
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
@@ -38,6 +42,15 @@ public class HttpDestination implements Destination {
 
     @Override
     public void accept(byte[] record) {
+        // Retained-for-retry bytes must never grow without bound inside the
+        // traced application's heap: when the collector stays unreachable,
+        // drop the backlog (loudly) rather than risk an OOM in the host app.
+        if (buffer.size() + record.length > bufferMaxBytes) {
+            System.err.println("[ArachnaTrace] HTTP destination buffer exceeded "
+                    + bufferMaxBytes + " bytes with the collector unreachable — dropping "
+                    + buffer.size() + " buffered bytes");
+            buffer.reset();
+        }
         buffer.writeBytes(record);
         if (buffer.size() >= flushThreshold) {
             sendBuffer();

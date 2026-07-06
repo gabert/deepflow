@@ -22,8 +22,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
-import com.github.gabert.arachna.trace.codec.Codec;
-import com.github.gabert.arachna.trace.jpaproxy.JpaProxyResolver;
+import com.github.gabert.arachna.trace.spi.jpaproxy.JpaProxyResolver;
 
 /**
  * JUnit 5 tests for {@link ObjectIdRegistry}, {@link ClassNameCache}, and {@link EnvelopeSerializer}.
@@ -672,11 +671,11 @@ class EnvelopeSerializerTest {
    @DisplayName("JPA proxy resolver branch")
    class JpaProxyResolverTests {
 
-      // The resolver is global state on Codec. Each test that touches it must
+      // The resolver is global state in JpaProxyResolvers. Each test that touches it must
       // clear it in @AfterEach so subsequent unrelated tests aren't affected.
       @AfterEach
       void clearResolver() {
-         Codec.setJpaProxyResolver(null);
+         JpaProxyResolvers.setActive(null);
       }
 
       @Test
@@ -689,7 +688,7 @@ class EnvelopeSerializerTest {
          // label is what lands in the envelope's VALUE.
          Node replacement = new Node("real");
          TriggeredNodeResolver resolver = new TriggeredNodeResolver("proxy", replacement);
-         Codec.setJpaProxyResolver(resolver);
+         JpaProxyResolvers.setActive(resolver);
 
          Map<Object, Object> env = cborToMap(toCbor(new Node("proxy")));
          Map<Object, Object> fields = (Map<Object, Object>) get(env, FieldIds.VALUE);
@@ -707,7 +706,7 @@ class EnvelopeSerializerTest {
          // A resolver that always returns null must NOT prevent normal
          // serialization of a non-proxy object. The Node should serialize as
          // a regular POJO envelope, not a <proxy> marker.
-         Codec.setJpaProxyResolver(new JpaProxyResolver() {
+         JpaProxyResolvers.setActive(new JpaProxyResolver() {
 
             @Override
             public String name() {
@@ -733,7 +732,7 @@ class EnvelopeSerializerTest {
 
       @AfterEach
       void clearResolver() {
-         Codec.setJpaProxyResolver(null);
+         JpaProxyResolvers.setActive(null);
       }
 
       @Test

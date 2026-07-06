@@ -27,9 +27,9 @@ public class ClickHouseClient {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private URI baseUri;
-    private String basicAuth;
-    private HttpClient http;
+    private final URI baseUri;
+    private final String basicAuth;
+    private final HttpClient http;
 
     public ClickHouseClient(QueryServerConfig config) {
         this.baseUri = URI.create(config.getClickhouseUrl());
@@ -41,7 +41,11 @@ public class ClickHouseClient {
                 .build();
     }
 
+    /** Test-only: for stubs that override {@code query(...)}; never issues HTTP. */
     ClickHouseClient() {
+        this.baseUri = null;
+        this.basicAuth = null;
+        this.http = null;
     }
 
     /**

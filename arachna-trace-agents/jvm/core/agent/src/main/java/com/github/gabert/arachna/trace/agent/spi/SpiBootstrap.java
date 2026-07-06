@@ -1,9 +1,9 @@
 package com.github.gabert.arachna.trace.agent.spi;
 
 import com.github.gabert.arachna.trace.agent.AgentConfig;
-import com.github.gabert.arachna.trace.agent.session.SessionIdResolver;
-import com.github.gabert.arachna.trace.codec.Codec;
-import com.github.gabert.arachna.trace.jpaproxy.JpaProxyResolver;
+import com.github.gabert.arachna.trace.spi.session.SessionIdResolver;
+import com.github.gabert.arachna.trace.codec.envelope.JpaProxyResolvers;
+import com.github.gabert.arachna.trace.spi.jpaproxy.JpaProxyResolver;
 
 /**
  * Lazy, double-checked-locking bootstrap for the agent's SPIs.
@@ -45,7 +45,7 @@ public final class SpiBootstrap {
 
     /**
      * Loads the configured {@link JpaProxyResolver} (if any) and registers it
-     * with {@link Codec}. Idempotent — subsequent calls are no-ops.
+     * with {@link JpaProxyResolvers}. Idempotent — subsequent calls are no-ops.
      */
     public void initJpaProxyResolverOnce() {
         if (jpaProxyResolverInitialized) return;
@@ -53,7 +53,7 @@ public final class SpiBootstrap {
             if (jpaProxyResolverInitialized) return;
             JpaProxyResolver resolver = SpiLoader.loadJpaProxyResolver(config, SpiLoader.resolveClassLoader());
             if (resolver != null) {
-                Codec.setJpaProxyResolver(resolver);
+                JpaProxyResolvers.setActive(resolver);
             }
             jpaProxyResolverInitialized = true;
         }
