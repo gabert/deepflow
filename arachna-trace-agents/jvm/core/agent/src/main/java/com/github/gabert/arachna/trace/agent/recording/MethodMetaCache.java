@@ -3,6 +3,7 @@ package com.github.gabert.arachna.trace.agent.recording;
 import net.bytebuddy.jar.asm.Type;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -65,7 +66,7 @@ public final class MethodMetaCache {
         Method method = findMethod(declaringType, name, descriptor);
         if (method != null) {
             return new MethodMeta(
-                    MethodSignatureFormatter.format(method),
+                    MethodSignatureFormatter.format(method).getBytes(StandardCharsets.UTF_8),
                     ParameterNamesResolver.resolve(method),
                     method.getReturnType() == void.class);
         }
@@ -73,7 +74,7 @@ public final class MethodMetaCache {
         // Descriptor-only fallback — should not happen for advice-originated
         // keys, but the hot path must never fail on a missing reflection hit.
         return new MethodMeta(
-                declaringType.getName() + "." + name + descriptor,
+                (declaringType.getName() + "." + name + descriptor).getBytes(StandardCharsets.UTF_8),
                 positionalKeys(Type.getArgumentTypes(descriptor).length),
                 Type.getReturnType(descriptor).getSort() == Type.VOID);
     }

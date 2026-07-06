@@ -23,6 +23,7 @@ public class AgentConfig {
     private final boolean propagateRequestId;
     private final boolean parameterNames;
     private final int maxValueSize;
+    private final int bufferMaxRecordsPerThread;
     private final String destination;
     private final Set<String> emitTags;
     private final String codeVersion;
@@ -41,6 +42,8 @@ public class AgentConfig {
         this.propagateRequestId = Boolean.parseBoolean(configMap.getOrDefault("propagate_request_id", "true"));
         this.parameterNames = Boolean.parseBoolean(configMap.getOrDefault("parameter_names", "true"));
         this.maxValueSize = Integer.parseInt(configMap.getOrDefault("max_value_size", "0"));
+        this.bufferMaxRecordsPerThread = Integer.parseInt(
+                configMap.getOrDefault("buffer_max_records_per_thread", "0"));
         this.destination = configMap.getOrDefault("destination", "file");
         this.emitTags = ConfigLoader.parseEmitTags(configMap.get("emit_tags"), ConfigLoader.DEFAULT_EMIT_TAGS);
         this.codeVersion = configMap.get("code_version");
@@ -93,6 +96,17 @@ public class AgentConfig {
 
     public int getMaxValueSize() {
         return maxValueSize;
+    }
+
+    /**
+     * Per-thread record-buffer cap. {@code 0} (default) means unbounded —
+     * memory grows during bursts and is reclaimed once the drainer catches
+     * up. A positive value protects the host application's heap when the
+     * drain side stalls: a thread's shard at the cap drops new records,
+     * loudly (stderr + shutdown summary), never silently.
+     */
+    public int getBufferMaxRecordsPerThread() {
+        return bufferMaxRecordsPerThread;
     }
 
     public String getDestination() {

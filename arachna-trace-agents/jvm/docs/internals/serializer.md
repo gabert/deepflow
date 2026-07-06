@@ -63,8 +63,9 @@ thread gets its own file: `<timestamp>-<threadname>.dft`.
 The first record written to each file is a `VERSION` record (rendered as
 `VR;1.3`).
 
-Files are flushed after each record -- traces are readable while the
-application is still running.
+Files are flushed whenever the drain queue runs empty (and on
+shutdown) -- traces are complete on disk whenever the application
+pauses, without paying a syscall per record under load.
 
 Note: the file-naming timestamp is not the logical session ID. The logical
 session ID comes from `SessionIdResolver` SPI and is embedded inside binary

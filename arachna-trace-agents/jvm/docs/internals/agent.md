@@ -43,6 +43,22 @@ Step 2 must happen before step 4. See
 ByteBuddy advice methods (`onEnter`, `onExit`) that read it. The
 actual recording work lives on `RequestRecorder`, not `ArachnaTraceAdvice`.
 
+The advice identifies the method with `@Advice.Origin Class` plus an
+`@Advice.Origin("#m#d")` name+descriptor string — both constant-pool
+loads. (`@Advice.Origin Method` would be re-resolved reflectively via
+`Class.getDeclaredMethod` on every invocation, because
+`disableClassFormatChanges()` prevents ByteBuddy from adding the
+synthetic caching field.) Per-method metadata — signature bytes, AR/AX
+parameter keys, void-ness — is resolved once and cached in
+`MethodMetaCache` (ClassValue-keyed, released on class unload).
+
+Three advice variants exist so the inlined bytecode never boxes values
+the configuration would discard; `premain` picks one: full
+(`ArachnaTraceAdvice`, AX enabled), `ArachnaTraceAdviceNoAx` (default
+tag set — no exit-side argument array), and
+`ArachnaTraceAdviceStructural` (`serialize_values=false` — binds no
+values at all).
+
 Why split: ByteBuddy advice methods MUST be static, but real recording
 state (config flags, buffer reference, SPI, value encoder) is naturally
 per-instance. The advice reads `RECORDER` and delegates the call to
@@ -76,27 +92,30 @@ JDK-class advice can see it):
 | Field | Type | Purpose |
 |---|---|---|
 | `RequestContext.REQUEST_COUNTER` | `AtomicLong` | Monotonic request-id source |
-| `RequestContext.CURRENT_REQUEST_ID` | `ThreadLocal<long[]>` | Active request id on this thread |
-| `RequestContext.DEPTH` | `ThreadLocal<int[]>` | Per-thread call depth |
-| `RequestContext.CALL_STACK` | `ThreadLocal<Deque<UUID>>` | Open-call UUID stack for parent-id resolution |
+| `RequestContext.state()` | `ThreadLocal<State>` | One per-thread object holding the active request id, call depth, and the open-call UUID stack for parent-id resolution — the recorder fetches it once per entry/exit |
 
 See [Executor Instrumentation](executor-instrumentation.md) for why
 these fields must live on a separately-injected bootstrap class.
 
 ## Recording flow
 
-### `recordEntry(method, self, allArguments) -> boolean`
+### `recordEntry(declaringType, methodKey, self, allArguments) -> boolean`
 
 1. Trigger lazy `JpaProxyResolver` initialization
    (`SpiBootstrap.initJpaProxyResolverOnce()`).
-2. Format method signature; read thread name; read **epoch-millisecond**
+2. Look up the method's cached `MethodMeta` (signature UTF-8 bytes,
+   AR/AX keys, void-ness — resolved once per method); read thread name
+   (UTF-8 bytes cached per thread); read **epoch-millisecond**
    timestamp (`System.currentTimeMillis()`); walk caller-frame line
-   number via `StackWalker`.
-3. Resolve session ID via the active `SessionIdResolver`.
-4. `RequestContext.beginRequest()` — increments depth and assigns a
+   number via `StackWalker` — only when `CL` is in `emit_tags`.
+3. Resolve session ID via the active `SessionIdResolver` (UTF-8 bytes
+   cached per thread).
+4. `state().beginRequest()` — increments depth and assigns a
    new request id when depth was 0.
-5. Read `parentCallId` (top of `CALL_STACK`) and freshly generate this
-   call's UUID.
+5. Read `parentCallId` (top of the call stack) and freshly generate
+   this call's UUID (random v4 from `ThreadLocalRandom` — unique, not
+   cryptographic; `UUID.randomUUID()`'s shared `SecureRandom` is a
+   cross-thread lock).
 6. If `serializeValues=true`: build METHOD_START + optional
    THIS_INSTANCE / THIS_INSTANCE_REF + ARGUMENTS records, encoding
    each value via `ValueEncoder.encode()` (which applies the
@@ -109,12 +128,12 @@ If anything throws before step 8, depth is rolled back, the byte[] is
 not offered, and `false` is returned so `ArachnaTraceAdvice.onExit` skips
 the matching exit.
 
-### `recordExit(method, returned, throwable, allArguments)`
+### `recordExit(declaringType, methodKey, returned, throwable, allArguments)`
 
-1. Pop the call's UUID off `CALL_STACK`. If empty (contract violation),
-   bail without writing — degrade silently rather than corrupt the
-   stream.
-2. `RequestContext.endRequest()` — decrement depth, return the active
+1. Pop the call's UUID off the thread's call stack. If empty (contract
+   violation), bail without writing — degrade silently rather than
+   corrupt the stream.
+2. `state().endRequest()` — decrement depth, return the active
    request id.
 3. Read thread name, epoch-millisecond timestamp, session ID.
 4. If `serializeValues=true`: build METHOD_END + RETURN/EXCEPTION +

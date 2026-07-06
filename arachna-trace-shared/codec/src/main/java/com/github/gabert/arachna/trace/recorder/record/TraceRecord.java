@@ -14,7 +14,7 @@ package com.github.gabert.arachna.trace.recorder.record;
  * {@link #toFrame()} builds the full frame; {@link #payloadBytes()} returns
  * just the body.</p>
  */
-public sealed interface TraceRecord
+public sealed interface TraceRecord extends FrameSource
         permits VersionRecord,
                 MethodStartRecord,
                 MethodEndRecord,
@@ -25,12 +25,6 @@ public sealed interface TraceRecord
                 ThisInstanceRecord,
                 ThisInstanceRefRecord,
                 SequenceRecord {
-
-    /** Single-byte record-type discriminator (matches {@link RecordType} constants). */
-    byte typeByte();
-
-    /** The body of this record — everything after the 5-byte frame header. */
-    byte[] payloadBytes();
 
     /** The full on-the-wire frame: 1 byte type + 4 bytes length + payload. */
     default byte[] toFrame() {

@@ -40,9 +40,21 @@ public record MethodStartRecord(
     @Override
     public byte[] payloadBytes() {
         byte[] sidBytes = sessionId != null ? sessionId.getBytes(StandardCharsets.UTF_8) : new byte[0];
-        byte[] sigBytes = signature.getBytes(StandardCharsets.UTF_8);
-        byte[] tnBytes = threadName.getBytes(StandardCharsets.UTF_8);
+        return payloadFrom(sidBytes, signature.getBytes(StandardCharsets.UTF_8),
+                threadName.getBytes(StandardCharsets.UTF_8),
+                timestamp, callerLine, requestId, callId, parentCallId);
+    }
 
+    /**
+     * Marshals the payload from pre-encoded UTF-8 strings — the agent's hot
+     * path caches signature/threadName/sessionId bytes and calls this
+     * directly (via {@link RawFrame}) instead of re-encoding per call.
+     * Single source of truth for the layout; {@link #payloadBytes()}
+     * delegates here. A null sessionId is passed as a zero-length array.
+     */
+    public static byte[] payloadFrom(byte[] sidBytes, byte[] sigBytes, byte[] tnBytes,
+                                     long timestamp, int callerLine, long requestId,
+                                     UUID callId, UUID parentCallId) {
         byte[] payload = new byte[
                 RecordType.SESSION_ID_LENGTH_SIZE + sidBytes.length
                         + RecordType.SIGNATURE_LENGTH_SIZE + sigBytes.length

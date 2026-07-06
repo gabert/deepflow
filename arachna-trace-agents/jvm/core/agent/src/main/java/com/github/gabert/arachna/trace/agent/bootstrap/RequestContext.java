@@ -12,67 +12,119 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>This class is injected into the bootstrap classloader so that advice
  * inlined into JDK classes (ThreadPoolExecutor, ForkJoinPool) can access
  * the same state as advice running in application classes.</p>
+ *
+ * <p>All per-thread state (request id, depth, call stack) lives in one
+ * {@link State} object behind a single ThreadLocal. The recorder's hot path
+ * fetches it once per entry/exit via {@link #state()} instead of paying a
+ * ThreadLocal lookup per field; the static delegates exist for advice
+ * call sites and tests, which touch a single field per call.</p>
  */
 public class RequestContext {
     public static final AtomicLong REQUEST_COUNTER = new AtomicLong(0);
-    public static final ThreadLocal<long[]> CURRENT_REQUEST_ID =
-            ThreadLocal.withInitial(() -> new long[]{0L});
-    public static final ThreadLocal<int[]> DEPTH =
-            ThreadLocal.withInitial(() -> new int[]{0});
+
+    private static final ThreadLocal<State> CONTEXT = ThreadLocal.withInitial(State::new);
+
+    /** The calling thread's propagation state — one ThreadLocal lookup. */
+    public static State state() {
+        return CONTEXT.get();
+    }
 
     /**
-     * Per-thread stack of UUIDs for currently-open traced calls. Pushed at
-     * method entry, popped at method exit. The top is the current call;
-     * the value below the top is the parent. Empty at the top of a request.
-     *
-     * <p>Used to express the call tree on the wire: each {@code MS} record
-     * carries its own UUID and its parent's UUID (or null at the root), so
-     * the processor can rebuild the tree without holding state across
-     * batch boundaries.</p>
+     * Per-thread propagation state. The call stack holds the UUIDs of
+     * currently-open traced calls: pushed at method entry, popped at method
+     * exit. The top is the current call; the value below the top is the
+     * parent. Empty at the top of a request. Each {@code MS} record carries
+     * its own UUID and its parent's UUID (or null at the root), so the
+     * processor can rebuild the tree without holding state across batch
+     * boundaries.
      */
-    public static final ThreadLocal<Deque<UUID>> CALL_STACK =
-            ThreadLocal.withInitial(ArrayDeque::new);
+    public static final class State {
+        private long requestId;
+        private int depth;
+        private Deque<UUID> callStack = new ArrayDeque<>();
 
-    /** Returns the current call's parent UUID, or {@code null} if at the top of the stack. */
+        /**
+         * Begin a request: at depth 0 assign a fresh request ID, then
+         * increment depth. Returns the active request ID.
+         */
+        public long beginRequest() {
+            if (depth == 0) {
+                requestId = REQUEST_COUNTER.incrementAndGet();
+            }
+            depth++;
+            return requestId;
+        }
+
+        /**
+         * End a request: decrement depth (clamped at 0). Returns the request
+         * ID that was active for this exit so callers can stamp it on records.
+         */
+        public long endRequest() {
+            long id = requestId;
+            if (depth > 0) {
+                depth--;
+            }
+            return id;
+        }
+
+        /** Returns the current call's parent UUID, or {@code null} if at the top of the stack. */
+        public UUID peekParentCallId() {
+            return callStack.peek();
+        }
+
+        public void pushCallId(UUID callId) {
+            callStack.push(callId);
+        }
+
+        /** Pops and returns the current call's UUID; returns {@code null} if the stack is empty. */
+        public UUID popCallId() {
+            return callStack.isEmpty() ? null : callStack.pop();
+        }
+    }
+
+    // --- Static delegates (advice call sites, tests) ---
+
+    public static long beginRequest() {
+        return state().beginRequest();
+    }
+
+    public static long endRequest() {
+        return state().endRequest();
+    }
+
     public static UUID peekParentCallId() {
-        return CALL_STACK.get().peek();
+        return state().peekParentCallId();
     }
 
     public static void pushCallId(UUID callId) {
-        CALL_STACK.get().push(callId);
+        state().pushCallId(callId);
     }
 
-    /** Pops and returns the current call's UUID; returns {@code null} if the stack is empty. */
     public static UUID popCallId() {
-        Deque<UUID> stack = CALL_STACK.get();
-        return stack.isEmpty() ? null : stack.pop();
+        return state().popCallId();
     }
 
-    /**
-     * Begin a request: at depth 0 assign a fresh request ID, then increment depth.
-     * Returns the active request ID.
-     */
-    public static long beginRequest() {
-        int[] depthHolder = DEPTH.get();
-        long[] requestIdHolder = CURRENT_REQUEST_ID.get();
-        if (depthHolder[0] == 0) {
-            requestIdHolder[0] = REQUEST_COUNTER.incrementAndGet();
-        }
-        depthHolder[0]++;
-        return requestIdHolder[0];
+    /** The request ID active on the calling thread ({@code 0} = none). */
+    public static long currentRequestId() {
+        return state().requestId;
     }
 
-    /**
-     * End a request: decrement depth (clamped at 0). Returns the request ID
-     * that was active for this exit so callers can stamp it on records.
-     */
-    public static long endRequest() {
-        int[] depthHolder = DEPTH.get();
-        long requestId = CURRENT_REQUEST_ID.get()[0];
-        if (depthHolder[0] > 0) {
-            depthHolder[0]--;
-        }
-        return requestId;
+    /** The current traced-call nesting depth on the calling thread. */
+    public static int currentDepth() {
+        return state().depth;
+    }
+
+    /** Number of currently-open traced calls on the calling thread. */
+    public static int callStackSize() {
+        return state().callStack.size();
+    }
+
+    /** Clears the calling thread's state — test isolation helper. */
+    public static void reset() {
+        State s = state();
+        s.requestId = 0L;
+        s.depth = 0;
+        s.callStack.clear();
     }
 
     /**
@@ -84,25 +136,24 @@ public class RequestContext {
      * across thread boundaries.
      */
     public static void runScoped(long parentRequestId, UUID parentCallId, Runnable body) {
-        long[] requestIdHolder = CURRENT_REQUEST_ID.get();
-        int[] depthHolder = DEPTH.get();
-        Deque<UUID> savedStack = CALL_STACK.get();
+        State s = state();
 
-        long savedRequestId = requestIdHolder[0];
-        int savedDepth = depthHolder[0];
+        long savedRequestId = s.requestId;
+        int savedDepth = s.depth;
+        Deque<UUID> savedStack = s.callStack;
 
-        requestIdHolder[0] = parentRequestId;
-        depthHolder[0] = 1;
+        s.requestId = parentRequestId;
+        s.depth = 1;
         Deque<UUID> workerStack = new ArrayDeque<>();
         if (parentCallId != null) workerStack.push(parentCallId);
-        CALL_STACK.set(workerStack);
+        s.callStack = workerStack;
 
         try {
             body.run();
         } finally {
-            requestIdHolder[0] = savedRequestId;
-            depthHolder[0] = savedDepth;
-            CALL_STACK.set(savedStack);
+            s.requestId = savedRequestId;
+            s.depth = savedDepth;
+            s.callStack = savedStack;
         }
     }
 
@@ -110,25 +161,24 @@ public class RequestContext {
      * Callable counterpart of {@link #runScoped(long, UUID, Runnable)}.
      */
     public static <V> V callScoped(long parentRequestId, UUID parentCallId, Callable<V> body) throws Exception {
-        long[] requestIdHolder = CURRENT_REQUEST_ID.get();
-        int[] depthHolder = DEPTH.get();
-        Deque<UUID> savedStack = CALL_STACK.get();
+        State s = state();
 
-        long savedRequestId = requestIdHolder[0];
-        int savedDepth = depthHolder[0];
+        long savedRequestId = s.requestId;
+        int savedDepth = s.depth;
+        Deque<UUID> savedStack = s.callStack;
 
-        requestIdHolder[0] = parentRequestId;
-        depthHolder[0] = 1;
+        s.requestId = parentRequestId;
+        s.depth = 1;
         Deque<UUID> workerStack = new ArrayDeque<>();
         if (parentCallId != null) workerStack.push(parentCallId);
-        CALL_STACK.set(workerStack);
+        s.callStack = workerStack;
 
         try {
             return body.call();
         } finally {
-            requestIdHolder[0] = savedRequestId;
-            depthHolder[0] = savedDepth;
-            CALL_STACK.set(savedStack);
+            s.requestId = savedRequestId;
+            s.depth = savedDepth;
+            s.callStack = savedStack;
         }
     }
 }

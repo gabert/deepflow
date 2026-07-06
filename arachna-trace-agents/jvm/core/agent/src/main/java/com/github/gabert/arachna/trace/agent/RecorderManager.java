@@ -2,7 +2,7 @@ package com.github.gabert.arachna.trace.agent;
 
 import com.github.gabert.arachna.trace.codec.AgentRun;
 import com.github.gabert.arachna.trace.recorder.buffer.RecordBuffer;
-import com.github.gabert.arachna.trace.recorder.buffer.UnboundedRecordBuffer;
+import com.github.gabert.arachna.trace.recorder.buffer.ShardedRecordBuffer;
 import com.github.gabert.arachna.trace.recorder.destination.Destination;
 import com.github.gabert.arachna.trace.recorder.destination.DestinationRegistry;
 import com.github.gabert.arachna.trace.recorder.destination.RecordDrainer;
@@ -59,7 +59,7 @@ public final class RecorderManager {
                 t.printStackTrace();
             }
 
-            RecordBuffer buffer = new UnboundedRecordBuffer();
+            RecordBuffer buffer = new ShardedRecordBuffer(config.getBufferMaxRecordsPerThread());
             RecordDrainer drainer = new RecordDrainer(buffer, destination);
             drainer.start();
 
@@ -107,6 +107,11 @@ public final class RecorderManager {
         } catch (IOException e) {
             System.err.println("Error closing destination.");
             e.printStackTrace();
+        }
+        if (buffer instanceof ShardedRecordBuffer sharded && sharded.droppedCount() > 0) {
+            System.err.println("[ArachnaTrace] " + sharded.droppedCount()
+                    + " record(s) were dropped this run because a thread's buffer hit "
+                    + "buffer_max_records_per_thread — the trace is incomplete.");
         }
     }
 }

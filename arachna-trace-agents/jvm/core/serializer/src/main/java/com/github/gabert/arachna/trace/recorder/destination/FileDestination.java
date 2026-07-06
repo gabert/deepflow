@@ -70,7 +70,10 @@ public class FileDestination implements Destination {
                 writer.write(line);
                 writer.write('\n');
             }
-            writer.flush();
+            // No per-record flush (a syscall per record throttles the drain
+            // thread). RecordDrainer calls flush() whenever its queue runs
+            // empty, so files are complete on disk whenever the application
+            // pauses — and always at shutdown.
         } catch (IOException e) {
             System.err.println("[ArachnaTrace] Error writing trace record: " + e.getMessage());
         }

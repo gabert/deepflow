@@ -138,7 +138,8 @@ java $JAVA_OPTS -jar your-app.jar
 ### 5. Inspect the output
 
 Traces are written to `<session_dump_location>/SESSION-<yyyyMMdd-HHmmss>/`
-with one `.dft` file per thread. Files are flushed after each record, so you
+with one `.dft` file per thread. Files are flushed whenever the drain
+queue runs empty, so you
 can tail them while the application is running:
 
 ```bash

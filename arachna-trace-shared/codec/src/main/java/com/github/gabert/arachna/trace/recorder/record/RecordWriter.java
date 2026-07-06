@@ -25,7 +25,7 @@ public final class RecordWriter {
      * (into its own frame, then into the concatenation) — the agent's hot
      * path uses this for composite entry/exit records.
      */
-    public static byte[] frames(TraceRecord... records) {
+    public static byte[] frames(FrameSource... records) {
         byte[][] payloads = new byte[records.length][];
         int total = 0;
         for (int i = 0; i < records.length; i++) {

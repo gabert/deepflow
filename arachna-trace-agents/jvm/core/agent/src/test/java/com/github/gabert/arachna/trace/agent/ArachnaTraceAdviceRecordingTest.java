@@ -50,8 +50,7 @@ class ArachnaTraceAdviceRecordingTest {
     @BeforeEach
     void setUp() throws Exception {
         buffer = new UnboundedRecordBuffer();
-        RequestContext.CURRENT_REQUEST_ID.get()[0] = 0L;
-        RequestContext.DEPTH.get()[0] = 0;
+        RequestContext.reset();
 
         configureAdvice("serialize_values=true&expand_this=false");
         setSpiField("jpaProxyResolverInitialized", true);
@@ -65,9 +64,7 @@ class ArachnaTraceAdviceRecordingTest {
     @AfterEach
     void tearDown() {
         ArachnaTraceAdvice.RECORDER = null;
-        RequestContext.CURRENT_REQUEST_ID.get()[0] = 0L;
-        RequestContext.DEPTH.get()[0] = 0;
-        RequestContext.CALL_STACK.get().clear();
+        RequestContext.reset();
     }
 
     // ==================== BASIC RECORDING ====================
@@ -341,7 +338,7 @@ class ArachnaTraceAdviceRecordingTest {
     @Test
     void propagatedTaskSharesParentRequestId() throws Exception {
         recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
-        long parentRequestId = RequestContext.CURRENT_REQUEST_ID.get()[0];
+        long parentRequestId = RequestContext.currentRequestId();
 
         CountDownLatch latch = new CountDownLatch(1);
         Runnable task = new PropagatingRunnable(() -> {
@@ -372,7 +369,7 @@ class ArachnaTraceAdviceRecordingTest {
     @Test
     void propagatedNestedCallsShareRequestId() throws Exception {
         recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
-        long parentRequestId = RequestContext.CURRENT_REQUEST_ID.get()[0];
+        long parentRequestId = RequestContext.currentRequestId();
 
         CountDownLatch latch = new CountDownLatch(1);
         Runnable task = new PropagatingRunnable(() -> {
@@ -409,14 +406,14 @@ class ArachnaTraceAdviceRecordingTest {
         Thread t1 = new Thread(() -> {
             awaitQuietly(startLatch);
             recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-            thread1Id.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
+            thread1Id.set(RequestContext.currentRequestId());
             recorder.recordExit(intMethod, 0, null, new Object[]{});
             doneLatch.countDown();
         });
         Thread t2 = new Thread(() -> {
             awaitQuietly(startLatch);
             recorder.recordEntry(intMethod, new ArrayList<>(), new Object[]{});
-            thread2Id.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
+            thread2Id.set(RequestContext.currentRequestId());
             recorder.recordExit(intMethod, 0, null, new Object[]{});
             doneLatch.countDown();
         });
@@ -588,14 +585,14 @@ class ArachnaTraceAdviceRecordingTest {
         // if recordExit somehow runs without a matching recordEntry having
         // pushed a UUID onto CALL_STACK, it must abort before mutating any
         // state — not emit a wrong-id ME, not decrement depth.
-        int priorDepth = RequestContext.DEPTH.get()[0];
-        int priorStackSize = RequestContext.CALL_STACK.get().size();
+        int priorDepth = RequestContext.currentDepth();
+        int priorStackSize = RequestContext.callStackSize();
 
         recorder.recordExit(voidMethod, null, null, new Object[]{});
 
-        assertEquals(priorDepth, RequestContext.DEPTH.get()[0],
+        assertEquals(priorDepth, RequestContext.currentDepth(),
                 "DEPTH must be unchanged when recordExit runs without a matching entry");
-        assertEquals(priorStackSize, RequestContext.CALL_STACK.get().size(),
+        assertEquals(priorStackSize, RequestContext.callStackSize(),
                 "CALL_STACK must be unchanged");
         assertNull(buffer.poll(),
                 "no record may be enqueued when there's no matching entry");
@@ -610,16 +607,16 @@ class ArachnaTraceAdviceRecordingTest {
         };
         setSpiField("sessionIdResolver", throwingResolver);
 
-        int priorDepth = RequestContext.DEPTH.get()[0];
-        int priorStackSize = RequestContext.CALL_STACK.get().size();
+        int priorDepth = RequestContext.currentDepth();
+        int priorStackSize = RequestContext.callStackSize();
 
         boolean recorded = recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{});
 
         assertFalse(recorded,
                 "recordEntry must return false when its try-block throws");
-        assertEquals(priorDepth, RequestContext.DEPTH.get()[0],
+        assertEquals(priorDepth, RequestContext.currentDepth(),
                 "DEPTH must be unchanged when entry fails (no rollback debt)");
-        assertEquals(priorStackSize, RequestContext.CALL_STACK.get().size(),
+        assertEquals(priorStackSize, RequestContext.callStackSize(),
                 "CALL_STACK must be unchanged when entry fails (push never happened)");
         assertNull(buffer.poll(),
                 "no record may be enqueued when entry fails");
@@ -662,9 +659,9 @@ class ArachnaTraceAdviceRecordingTest {
                 "MS and ME must pair via callId");
 
         assertBufferEmpty();
-        assertEquals(0, RequestContext.DEPTH.get()[0],
+        assertEquals(0, RequestContext.currentDepth(),
                 "depth must drain to zero after the successful pair");
-        assertTrue(RequestContext.CALL_STACK.get().isEmpty(),
+        assertTrue((RequestContext.callStackSize() == 0),
                 "stack must drain to empty after the successful pair");
     }
 

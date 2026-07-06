@@ -130,6 +130,28 @@ See [Truncation](../../../docs/truncation.md).
 max_value_size=0
 ```
 
+### buffer_max_records_per_thread
+
+Per-thread cap on the in-memory record queue between traced threads and
+the drain thread. `0` (default) means unbounded: memory grows during
+bursts and is reclaimed once the drainer catches up. A positive value
+protects the host application's heap when the drain side stalls (for
+example, the collector is unreachable): a thread whose queue is at the
+cap drops new records instead of growing.
+
+Drops are never silent -- each shard logs when it starts dropping and
+every 10,000th drop after that, and a shutdown summary reports the
+total. A trace with drops is incomplete and says so.
+
+| Value | Description |
+|-------|-------------|
+| `0` | Unbounded (default) |
+| `>0` | Maximum queued records per thread |
+
+```properties
+buffer_max_records_per_thread=0
+```
+
 ### emit_tags
 
 Controls which trace record tags are emitted. Comma-separated list.

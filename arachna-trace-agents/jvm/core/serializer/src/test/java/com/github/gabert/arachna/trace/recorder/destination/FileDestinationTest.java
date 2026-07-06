@@ -139,14 +139,18 @@ class FileDestinationTest {
         assertTrue(lines.stream().anyMatch(l -> l.startsWith("RE;")));
     }
 
-    // --- Lines are flushed immediately (readable before close) ---
+    // --- Lines are on disk after flush() (readable before close) ---
+    // The drainer calls flush() whenever its queue runs empty, so in the
+    // live pipeline traces are readable whenever the application pauses;
+    // accept() itself no longer flushes per record.
 
     @Test
-    void linesVisibleBeforeClose(@TempDir Path tempDir) throws Exception {
+    void linesVisibleAfterFlushBeforeClose(@TempDir Path tempDir) throws Exception {
         FileDestination dest = createDestination(tempDir);
 
         byte[] entry = RecordWriter.logEntry(null, SIGNATURE, "main", 1000L, 10, 0L, null, null, null, Codec.encode(new Object[]{}));
         dest.accept(entry);
+        dest.flush();
 
         // Read before close — lines should already be on disk
         Path sessionDir = findSessionDir(tempDir);

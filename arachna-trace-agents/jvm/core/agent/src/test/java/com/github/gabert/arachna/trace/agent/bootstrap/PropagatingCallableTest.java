@@ -24,16 +24,14 @@ class PropagatingCallableTest {
 
     @BeforeEach
     void resetThreadLocals() {
-        RequestContext.CURRENT_REQUEST_ID.get()[0] = 0L;
-        RequestContext.DEPTH.get()[0] = 0;
-        RequestContext.CALL_STACK.get().clear();
+        RequestContext.reset();
     }
 
     @Test
     void carriesRequestIdToWorker() throws Exception {
         AtomicLong captured = new AtomicLong(0);
         Callable<String> task = new PropagatingCallable<>(() -> {
-            captured.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
+            captured.set(RequestContext.currentRequestId());
             return "ok";
         }, 4242L, null);
 
@@ -64,14 +62,14 @@ class PropagatingCallableTest {
         AtomicLong idAfter = new AtomicLong(-1);
 
         executor.submit(() -> {
-            long priorId = RequestContext.CURRENT_REQUEST_ID.get()[0];
-            int priorDepth = RequestContext.DEPTH.get()[0];
+            long priorId = RequestContext.currentRequestId();
+            int priorDepth = RequestContext.currentDepth();
 
             Callable<String> task = new PropagatingCallable<>(() -> "ok", 99L, null);
             task.call();
 
-            depthAfter.set(RequestContext.DEPTH.get()[0]);
-            idAfter.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
+            depthAfter.set(RequestContext.currentDepth());
+            idAfter.set(RequestContext.currentRequestId());
             assertEquals(priorDepth, depthAfter.get());
             assertEquals(priorId, idAfter.get());
             return null;
@@ -96,7 +94,7 @@ class PropagatingCallableTest {
                 fail("expected throw");
             } catch (Exception ignored) {
             }
-            depthAfter.set(RequestContext.DEPTH.get()[0]);
+            depthAfter.set(RequestContext.currentDepth());
             return null;
         });
         future.get();
@@ -115,7 +113,7 @@ class PropagatingCallableTest {
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.submit(() -> {
-            assertTrue(RequestContext.CALL_STACK.get().isEmpty(),
+            assertTrue((RequestContext.callStackSize() == 0),
                     "worker thread starts with empty stack");
 
             Callable<String> task = new PropagatingCallable<>(() -> {
@@ -129,7 +127,7 @@ class PropagatingCallableTest {
             } catch (Exception e) {
                 fail(e);
             }
-            stackEmptyAfter.set(RequestContext.CALL_STACK.get().isEmpty());
+            stackEmptyAfter.set((RequestContext.callStackSize() == 0));
             return null;
         }).get();
         executor.shutdown();

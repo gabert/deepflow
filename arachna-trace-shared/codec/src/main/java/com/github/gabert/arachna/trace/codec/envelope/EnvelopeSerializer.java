@@ -92,6 +92,43 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
       return new EnvelopeSerializer(del);
    }
 
+   // ── Cycle-detection scope ───────────────────────────────
+   // One seen-map per thread, scoped by envelope-nesting depth: the
+   // outermost envelope node opens the scope, every nested envelope node
+   // shares the map, and the map is emptied when the outermost node
+   // completes (or unwinds exceptionally). Equivalent to the previous
+   // SerializerProvider-attribute scoping — every envelope node in one
+   // top-level encode sits under a single outermost envelope node, since
+   // unwrapped types (String, Number, Boolean, Character, enums) have no
+   // children — but without a per-node attribute-map lookup.
+   //
+   // Long-running-agent memory discipline: after an unusually large object
+   // graph, the map is discarded instead of cleared so a one-off huge
+   // serialization does not pin peak table capacity on the thread forever.
+   private static final int SEEN_TRIM_THRESHOLD = 4096;
+
+   private static final ThreadLocal<SeenScope> SEEN = ThreadLocal.withInitial(SeenScope::new);
+
+   private static final class SeenScope {
+      private IdentityHashMap<Object, Long> map = new IdentityHashMap<>();
+      private int depth;
+
+      IdentityHashMap<Object, Long> enter() {
+         depth++;
+         return map;
+      }
+
+      void exit() {
+         if (--depth == 0) {
+            if (map.size() > SEEN_TRIM_THRESHOLD) {
+               map = new IdentityHashMap<>();
+            } else {
+               map.clear();
+            }
+         }
+      }
+   }
+
    @Override
    public void serialize(Object value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
 
@@ -100,17 +137,17 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
          return;
       }
 
-      // ── Cycle detection ───────────────────────────────────
-      // Retrieve or create the seen-set for this serialization.
-      // SerializerProvider attributes are scoped to one top-level
-      // writeValue() call, so the seen-set is automatically fresh
-      // for each captured method call.
-      @SuppressWarnings("unchecked")
-      IdentityHashMap<Object, Long> seen = (IdentityHashMap<Object, Long>) serializers.getAttribute("seen");
-      if (seen == null) {
-         seen = new IdentityHashMap<>();
-         serializers.setAttribute("seen", seen);
+      SeenScope scope = SEEN.get();
+      IdentityHashMap<Object, Long> seen = scope.enter();
+      try {
+         serializeTracked(value, gen, serializers, seen);
+      } finally {
+         scope.exit();
       }
+   }
+
+   private void serializeTracked(Object value, JsonGenerator gen, SerializerProvider serializers,
+                                 IdentityHashMap<Object, Long> seen) throws IOException {
 
       long id = ObjectIdRegistry.idOf(value);
 

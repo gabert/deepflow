@@ -10,6 +10,7 @@ import com.github.gabert.arachna.trace.recorder.record.ArgumentsRecord;
 import com.github.gabert.arachna.trace.recorder.record.ExceptionRecord;
 import com.github.gabert.arachna.trace.recorder.record.MethodEndRecord;
 import com.github.gabert.arachna.trace.recorder.record.MethodStartRecord;
+import com.github.gabert.arachna.trace.recorder.record.RawFrame;
 import com.github.gabert.arachna.trace.recorder.record.RecordWriter;
 import com.github.gabert.arachna.trace.recorder.record.ReturnRecord;
 import com.github.gabert.arachna.trace.recorder.record.SequenceRecord;
@@ -19,6 +20,7 @@ import com.github.gabert.arachna.trace.recorder.record.TraceRecord;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,13 +41,26 @@ import java.util.stream.Stream;
  *
  * <p>The hot-path entry points identify the method by declaring class +
  * {@code name+descriptor} key (both constant-pool loads in the inlined
- * advice); everything derived from the method — signature string, AR/AX
+ * advice); everything derived from the method — signature bytes, AR/AX
  * keys, void-ness — comes from {@link MethodMetaCache} and is resolved once
- * per method, not per call. The {@link Method}-typed overloads exist for
- * direct (non-advice) callers such as tests.</p>
+ * per method, not per call. Thread-name and session-id UTF-8 encodings are
+ * cached per thread (one small, thread-lifetime entry each). The
+ * {@link Method}-typed overloads exist for direct (non-advice) callers such
+ * as tests.</p>
  */
 public class RequestRecorder {
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
+    private static final byte[] EMPTY_BYTES = new byte[0];
+
+    /**
+     * Per-thread cache of the last-seen threadName/sessionId and their UTF-8
+     * bytes. Both strings repeat across thousands of consecutive calls
+     * (thread names are stable; session ids per request), so the encode +
+     * allocation happens only when the value actually changes. Footprint is
+     * two strings + two small arrays per thread, released with the thread.
+     */
+    private static final ThreadLocal<ThreadStringCache> STRING_CACHE =
+            ThreadLocal.withInitial(ThreadStringCache::new);
 
     private final RecordBuffer recordBuffer;
     private final ValueEncoder valueEncoder;
@@ -101,7 +116,7 @@ public class RequestRecorder {
 
     /**
      * Records a method entry. Returns {@code true} iff the entry was fully
-     * committed (the call's UUID has been pushed onto {@link RequestContext#CALL_STACK}
+     * committed (the call's UUID has been pushed onto the thread's call stack
      * <em>and</em> the {@code MS} record has been queued). Callers (the
      * ByteBuddy advice in {@code ArachnaTraceAdvice}) MUST call
      * {@link #recordExit} <em>only</em> when this method returns {@code true}.
@@ -116,12 +131,14 @@ public class RequestRecorder {
         if (recordBuffer == null) return false;
         spi.initJpaProxyResolverOnce();
 
+        RequestContext.State ctx = RequestContext.state();
         UUID callId;
         byte[] record;
         boolean depthIncremented = false;
         try {
             MethodMeta meta = MethodMetaCache.get(declaringType, methodKey);
-            String threadName = Thread.currentThread().getName();
+            ThreadStringCache strings = STRING_CACHE.get();
+            byte[] threadNameBytes = strings.threadName(Thread.currentThread().getName());
             long timestamp = System.currentTimeMillis();
             // Stack at this point: [recordEntry, target_method, caller_of_target, ...]
             // ByteBuddy inlines onEnter into target_method's bytecode, so the call
@@ -134,14 +151,17 @@ public class RequestRecorder {
                             .orElse(0)
                     : 0;
 
-            String sessionId = spi.getSessionIdResolver().resolve();
+            byte[] sessionIdBytes = strings.sessionId(spi.getSessionIdResolver().resolve());
 
-            long requestId = RequestContext.beginRequest();
+            long requestId = ctx.beginRequest();
             depthIncremented = true;
 
-            UUID parentCallId = RequestContext.peekParentCallId();
+            UUID parentCallId = ctx.peekParentCallId();
             callId = randomCallId();
 
+            RawFrame startRecord = new RawFrame(MethodStartRecord.TYPE,
+                    MethodStartRecord.payloadFrom(sessionIdBytes, meta.signatureUtf8(), threadNameBytes,
+                            timestamp, callerLine, requestId, callId, parentCallId));
             SequenceRecord sequenceRecord = emitSq
                     ? new SequenceRecord(callId, seqCounter.getAndIncrement())
                     : null;
@@ -149,20 +169,18 @@ public class RequestRecorder {
             if (serializeValues) {
                 Object selfForCapture = emitTi ? self : null;
                 Object[] argsForCapture = emitAr ? allArguments : null;
-                record = buildSerializedEntry(meta, sessionId, threadName, timestamp, callerLine,
-                        requestId, callId, parentCallId, sequenceRecord, selfForCapture, argsForCapture);
+                record = buildSerializedEntry(meta, startRecord, sequenceRecord,
+                        selfForCapture, argsForCapture);
             } else {
-                MethodStartRecord startRecord = new MethodStartRecord(sessionId, meta.signature(),
-                        threadName, timestamp, callerLine, requestId, callId, parentCallId);
                 record = RecordWriter.frames(startRecord, sequenceRecord);
             }
         } catch (Throwable t) {
             // Roll back depth so the next root entry on this thread still
-            // generates a fresh request id at depth==0. CALL_STACK is
+            // generates a fresh request id at depth==0. The call stack is
             // untouched (push has not happened yet), so nothing to roll back
             // there.
             if (depthIncremented) {
-                RequestContext.endRequest();
+                ctx.endRequest();
             }
             System.err.println("[ArachnaTrace] Error recording entry.");
             t.printStackTrace();
@@ -173,7 +191,7 @@ public class RequestRecorder {
         // RecordBuffer.offer() do not throw. So once we get past the try
         // block above, the contract (push-and-emit happen together) is
         // guaranteed.
-        RequestContext.pushCallId(callId);
+        ctx.pushCallId(callId);
         recordBuffer.offer(record);
         return true;
     }
@@ -193,14 +211,20 @@ public class RequestRecorder {
         // but a contract violation (e.g. advice misfire) would otherwise
         // emit a wrong-id ME and double-decrement depth. Abort before any
         // state mutation so we degrade silently rather than corrupting.
-        UUID callId = RequestContext.popCallId();
+        RequestContext.State ctx = RequestContext.state();
+        UUID callId = ctx.popCallId();
         if (callId == null) return;
-        long requestId = RequestContext.endRequest();
+        long requestId = ctx.endRequest();
         try {
-            String threadName = Thread.currentThread().getName();
+            ThreadStringCache strings = STRING_CACHE.get();
+            byte[] threadNameBytes = strings.threadName(Thread.currentThread().getName());
             long timestamp = System.currentTimeMillis();
 
-            String sessionId = spi.getSessionIdResolver().resolve();
+            byte[] sessionIdBytes = strings.sessionId(spi.getSessionIdResolver().resolve());
+
+            RawFrame endRecord = new RawFrame(MethodEndRecord.TYPE,
+                    MethodEndRecord.payloadFrom(sessionIdBytes, threadNameBytes, timestamp,
+                            requestId, callId));
 
             byte[] record;
             if (serializeValues) {
@@ -223,11 +247,9 @@ public class RequestRecorder {
                             : new ReturnRecord(valueEncoder.encode(returned));
                 }
 
-                MethodEndRecord endRecord = new MethodEndRecord(sessionId, threadName, timestamp,
-                        requestId, callId);
                 record = RecordWriter.frames(endRecord, returnRecord, exitArgsRecord);
             } else {
-                record = RecordWriter.methodEnd(sessionId, threadName, timestamp, requestId, callId);
+                record = RecordWriter.frames(endRecord);
             }
             recordBuffer.offer(record);
         } catch (Throwable t) {
@@ -243,16 +265,9 @@ public class RequestRecorder {
 
     // --- Private: entry record building ---
 
-    private byte[] buildSerializedEntry(MethodMeta meta,
-                                         String sessionId, String threadName,
-                                         long timestamp, int callerLine,
-                                         long requestId,
-                                         UUID callId, UUID parentCallId,
+    private byte[] buildSerializedEntry(MethodMeta meta, RawFrame startRecord,
                                          SequenceRecord sequenceRecord,
                                          Object self, Object[] allArguments) throws IOException {
-        MethodStartRecord startRecord = new MethodStartRecord(sessionId, meta.signature(), threadName,
-                timestamp, callerLine, requestId, callId, parentCallId);
-
         TraceRecord thisRecord = null;
         if (self != null) {
             if (expandThis) {
@@ -309,6 +324,34 @@ public class RequestRecorder {
                 "message", String.valueOf(throwable.getMessage()),
                 "stacktrace", stacktrace
         );
+    }
+
+    private static final class ThreadStringCache {
+        private String lastThreadName;
+        private byte[] threadNameBytes;
+        private String lastSessionId;
+        private byte[] sessionIdBytes;
+
+        byte[] threadName(String name) {
+            // Thread.getName() returns the same String instance until
+            // setName — reference check is the fast path.
+            if (name != lastThreadName) {
+                threadNameBytes = name.getBytes(StandardCharsets.UTF_8);
+                lastThreadName = name;
+            }
+            return threadNameBytes;
+        }
+
+        byte[] sessionId(String sessionId) {
+            if (sessionId == null) return EMPTY_BYTES;
+            // Resolvers may return a fresh String per call — equals, with a
+            // reference check inside String.equals covering the stable case.
+            if (!sessionId.equals(lastSessionId)) {
+                sessionIdBytes = sessionId.getBytes(StandardCharsets.UTF_8);
+                lastSessionId = sessionId;
+            }
+            return sessionIdBytes;
+        }
     }
 
 }

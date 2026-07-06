@@ -76,7 +76,8 @@ On Linux/Mac use `:` as classpath separator instead of `;`.
 ## Read the traces
 
 Output is written to `<session_dump_location>/SESSION-<yyyyMMdd-HHmmss>/`
-with one `.dft` file per thread. Files are flushed after each record, so
+with one `.dft` file per thread. Files are flushed whenever the drain
+queue runs empty, so
 traces are readable while the application is still running.
 
 ```bash

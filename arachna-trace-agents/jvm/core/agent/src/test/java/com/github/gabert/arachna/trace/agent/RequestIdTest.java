@@ -18,104 +18,82 @@ class RequestIdTest {
 
     @BeforeEach
     void resetThreadLocals() {
-        RequestContext.CURRENT_REQUEST_ID.get()[0] = 0L;
-        RequestContext.DEPTH.get()[0] = 0;
-        RequestContext.CALL_STACK.get().clear();
+        RequestContext.reset();
     }
 
     // --- Layer 1: depth-based request ID ---
 
     @Test
     void rootEntryGeneratesNewRequestId() {
-        int[] depth = RequestContext.DEPTH.get();
-        long[] requestId = RequestContext.CURRENT_REQUEST_ID.get();
+        assertEquals(0, RequestContext.currentDepth());
 
-        // Simulate recordEntry at depth 0
-        assertEquals(0, depth[0]);
-        // depth == 0 triggers new request ID
-        // (we test the logic directly, not through recordEntry which needs RECORD_BUFFER)
-        simulateEnter(depth, requestId);
-        long firstId = requestId[0];
+        // Root entry at depth 0 triggers a new request ID
+        long firstId = RequestContext.beginRequest();
         assertTrue(firstId > 0);
-        assertEquals(1, depth[0]);
+        assertEquals(1, RequestContext.currentDepth());
 
         // Nested call inherits the same request ID
-        simulateEnter(depth, requestId);
-        assertEquals(firstId, requestId[0]);
-        assertEquals(2, depth[0]);
+        assertEquals(firstId, RequestContext.beginRequest());
+        assertEquals(2, RequestContext.currentDepth());
 
         // Exit nested
-        simulateExit(depth);
-        assertEquals(1, depth[0]);
+        RequestContext.endRequest();
+        assertEquals(1, RequestContext.currentDepth());
 
         // Exit root
-        simulateExit(depth);
-        assertEquals(0, depth[0]);
+        RequestContext.endRequest();
+        assertEquals(0, RequestContext.currentDepth());
 
         // New root entry gets a different request ID
-        simulateEnter(depth, requestId);
-        long secondId = requestId[0];
+        long secondId = RequestContext.beginRequest();
         assertNotEquals(firstId, secondId);
-        assertEquals(1, depth[0]);
+        assertEquals(1, RequestContext.currentDepth());
 
-        simulateExit(depth);
+        RequestContext.endRequest();
     }
 
     @Test
     void depthNeverGoesBelowZero() {
-        int[] depth = RequestContext.DEPTH.get();
-
-        assertEquals(0, depth[0]);
-        simulateExit(depth); // extra exit
-        assertEquals(0, depth[0]);
-        simulateExit(depth); // another extra exit
-        assertEquals(0, depth[0]);
+        assertEquals(0, RequestContext.currentDepth());
+        RequestContext.endRequest(); // extra exit
+        assertEquals(0, RequestContext.currentDepth());
+        RequestContext.endRequest(); // another extra exit
+        assertEquals(0, RequestContext.currentDepth());
     }
 
     @Test
     void threadPoolReuseGetsDifferentRequestIds() {
-        int[] depth = RequestContext.DEPTH.get();
-        long[] requestId = RequestContext.CURRENT_REQUEST_ID.get();
-
         // Request 1
-        simulateEnter(depth, requestId);
-        long id1 = requestId[0];
-        simulateEnter(depth, requestId);
-        assertEquals(id1, requestId[0]); // nested inherits
-        simulateExit(depth);
-        simulateExit(depth);
-        assertEquals(0, depth[0]);
+        long id1 = RequestContext.beginRequest();
+        assertEquals(id1, RequestContext.beginRequest()); // nested inherits
+        RequestContext.endRequest();
+        RequestContext.endRequest();
+        assertEquals(0, RequestContext.currentDepth());
 
         // Request 2 on same thread
-        simulateEnter(depth, requestId);
-        long id2 = requestId[0];
+        long id2 = RequestContext.beginRequest();
         assertNotEquals(id1, id2);
-        simulateExit(depth);
-        assertEquals(0, depth[0]);
+        RequestContext.endRequest();
+        assertEquals(0, RequestContext.currentDepth());
 
         // Request 3 on same thread
-        simulateEnter(depth, requestId);
-        long id3 = requestId[0];
+        long id3 = RequestContext.beginRequest();
         assertNotEquals(id2, id3);
-        simulateExit(depth);
+        RequestContext.endRequest();
     }
 
     // --- Layer 2: PropagatingRunnable ---
 
     @Test
     void propagatingRunnableCarriesRequestId() throws Exception {
-        int[] depth = RequestContext.DEPTH.get();
-        long[] requestId = RequestContext.CURRENT_REQUEST_ID.get();
-
         // Simulate a request on the submitting thread
-        simulateEnter(depth, requestId);
-        long parentId = requestId[0];
+        long parentId = RequestContext.beginRequest();
 
         AtomicLong capturedId = new AtomicLong(0);
         CountDownLatch latch = new CountDownLatch(1);
 
         Runnable task = new PropagatingRunnable(() -> {
-            capturedId.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
+            capturedId.set(RequestContext.currentRequestId());
             latch.countDown();
         }, parentId, null);
 
@@ -126,16 +104,12 @@ class RequestIdTest {
 
         assertEquals(parentId, capturedId.get());
 
-        simulateExit(depth);
+        RequestContext.endRequest();
     }
 
     @Test
     void propagatingRunnableRestoresState() throws Exception {
-        int[] depth = RequestContext.DEPTH.get();
-        long[] requestId = RequestContext.CURRENT_REQUEST_ID.get();
-
-        simulateEnter(depth, requestId);
-        long parentId = requestId[0];
+        long parentId = RequestContext.beginRequest();
 
         AtomicLong depthAfter = new AtomicLong(-1);
         AtomicLong idAfter = new AtomicLong(-1);
@@ -149,14 +123,14 @@ class RequestIdTest {
         // Run the propagating task, then check state is restored
         executor.execute(() -> {
             // Before: clean state
-            long priorId = RequestContext.CURRENT_REQUEST_ID.get()[0];
-            int priorDepth = RequestContext.DEPTH.get()[0];
+            long priorId = RequestContext.currentRequestId();
+            int priorDepth = RequestContext.currentDepth();
 
             task.run();
 
             // After: state must be restored
-            depthAfter.set(RequestContext.DEPTH.get()[0]);
-            idAfter.set(RequestContext.CURRENT_REQUEST_ID.get()[0]);
+            depthAfter.set(RequestContext.currentDepth());
+            idAfter.set(RequestContext.currentRequestId());
             assertEquals(priorDepth, depthAfter.get());
             assertEquals(priorId, idAfter.get());
             latch.countDown();
@@ -164,7 +138,7 @@ class RequestIdTest {
         latch.await();
         executor.shutdown();
 
-        simulateExit(depth);
+        RequestContext.endRequest();
     }
 
     @Test
@@ -172,11 +146,7 @@ class RequestIdTest {
         // runScoped's finally must restore state on the exception path too —
         // a worker thread that gets a throwing body cannot keep depth=1
         // bleeding into the next pool task it runs.
-        int[] depth = RequestContext.DEPTH.get();
-        long[] requestId = RequestContext.CURRENT_REQUEST_ID.get();
-
-        simulateEnter(depth, requestId);
-        long parentId = requestId[0];
+        long parentId = RequestContext.beginRequest();
 
         CountDownLatch latch = new CountDownLatch(1);
         AtomicLong depthAfter = new AtomicLong(-1);
@@ -191,7 +161,7 @@ class RequestIdTest {
                 task.run();
             } catch (RuntimeException ignored) {
             }
-            depthAfter.set(RequestContext.DEPTH.get()[0]);
+            depthAfter.set(RequestContext.currentDepth());
             latch.countDown();
         });
         latch.await();
@@ -199,7 +169,7 @@ class RequestIdTest {
 
         assertEquals(0, depthAfter.get());
 
-        simulateExit(depth);
+        RequestContext.endRequest();
     }
 
     // --- Layer 3: PropagatingRunnable carries parent call_id ---
@@ -239,8 +209,8 @@ class RequestIdTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         AtomicReference<Boolean> stackEmptyAfter = new AtomicReference<>();
         executor.execute(() -> {
-            // The worker thread starts with an empty CALL_STACK.
-            assertTrue(RequestContext.CALL_STACK.get().isEmpty());
+            // The worker thread starts with an empty call stack.
+            assertEquals(0, RequestContext.callStackSize());
 
             Runnable task = new PropagatingRunnable(() -> {
                 // Inside the task: stack is seeded with parent
@@ -252,14 +222,14 @@ class RequestIdTest {
             task.run();
 
             // After the task: worker's stack must be back to empty
-            stackEmptyAfter.set(RequestContext.CALL_STACK.get().isEmpty());
+            stackEmptyAfter.set(RequestContext.callStackSize() == 0);
             latch.countDown();
         });
         latch.await();
         executor.shutdown();
 
         assertTrue(stackEmptyAfter.get(),
-                "Worker's CALL_STACK must be restored to its prior state after runScoped");
+                "Worker's call stack must be restored to its prior state after runScoped");
 
         // Submitter's stack still has its outer call — async swap must not have touched it
         assertEquals(outerCall, RequestContext.peekParentCallId());
@@ -273,7 +243,7 @@ class RequestIdTest {
         CountDownLatch latch = new CountDownLatch(1);
 
         Runnable task = new PropagatingRunnable(() -> {
-            stackSizeOnEntry.set(RequestContext.CALL_STACK.get().size());
+            stackSizeOnEntry.set(RequestContext.callStackSize());
             capturedParent.set(RequestContext.peekParentCallId());
             latch.countDown();
         }, 42L, null);
@@ -286,27 +256,5 @@ class RequestIdTest {
         assertEquals(0L, stackSizeOnEntry.get(),
                 "null parentCallId means the stack starts empty on the worker");
         assertNull(capturedParent.get());
-    }
-
-    // --- Helpers mimicking ArachnaTraceAdvice.recordEntry/recordExit logic ---
-
-    private static final AtomicLong TEST_COUNTER = new AtomicLong(0);
-
-    static {
-        // Use a separate counter range so tests don't collide with the real counter
-        TEST_COUNTER.set(1000);
-    }
-
-    private void simulateEnter(int[] depthHolder, long[] requestIdHolder) {
-        if (depthHolder[0] == 0) {
-            requestIdHolder[0] = TEST_COUNTER.incrementAndGet();
-        }
-        depthHolder[0]++;
-    }
-
-    private void simulateExit(int[] depthHolder) {
-        if (depthHolder[0] > 0) {
-            depthHolder[0]--;
-        }
     }
 }
