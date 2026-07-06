@@ -89,19 +89,123 @@ async function toggleExpand(g: BehaviorDiffGroup): Promise<void> {
   }
 }
 
-function pretty(rows: PayloadRow[], kind: string): string {
+// --- side-by-side line diff -----------------------------------------------
+//
+// The expanded group renders both examples as ONE aligned grid inside one
+// scroll container: the sides cannot scroll apart, and each aligned row is
+// classified same / changed / only-A / only-B so the difference is marked
+// in place. This is the "adjacent transformations made comparable when the
+// user asks" case from the product philosophy — the user explicitly picked
+// two sessions and expanded the group.
+//
+// __meta__ (object id, own_hash) is run-local identity: it differs between
+// any two recordings, so with it visible almost every line would be marked.
+// Hidden by default; the toggle brings it back (never silently unavailable).
+
+const showMeta = ref(false);
+
+interface DiffLineRow {
+  left: string;
+  right: string;
+  cls: 'same' | 'changed' | 'left' | 'right';
+}
+
+function stripMeta(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(stripMeta);
+  if (node && typeof node === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === '__meta__') continue;
+      out[key] = stripMeta(value);
+    }
+    return out;
+  }
+  return node;
+}
+
+function payloadLines(rows: PayloadRow[], kind: string, includeMeta: boolean): string[] {
   const row = rows.find((r) => r.kind === kind);
-  if (!row) return '';
+  if (!row) return [];
   try {
-    return JSON.stringify(JSON.parse(row.payload_json), null, 2);
+    let parsed: unknown = JSON.parse(row.payload_json);
+    if (!includeMeta) parsed = stripMeta(parsed);
+    return JSON.stringify(parsed, null, 2).split('\n');
   } catch {
-    return row.payload_json;
+    return row.payload_json ? [row.payload_json] : [];
   }
 }
+
+/** Line-level LCS alignment; unmatched runs pair up as 'changed' rows. */
+function diffRows(a: string[], b: string[]): DiffLineRow[] {
+  const n = a.length;
+  const m = b.length;
+  const rows: DiffLineRow[] = [];
+  if (n * m > 4_000_000) {
+    // Degenerate size — pair line by line rather than blow up the DP table.
+    for (let i = 0; i < Math.max(n, m); i++) {
+      const left = a[i] ?? '';
+      const right = b[i] ?? '';
+      rows.push({ left, right, cls: left === right ? 'same' : 'changed' });
+    }
+    return rows;
+  }
+  const dp: Uint32Array[] = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const pendingLeft: string[] = [];
+  const pendingRight: string[] = [];
+  const flush = () => {
+    const k = Math.max(pendingLeft.length, pendingRight.length);
+    for (let x = 0; x < k; x++) {
+      const left = pendingLeft[x];
+      const right = pendingRight[x];
+      if (left !== undefined && right !== undefined) rows.push({ left, right, cls: 'changed' });
+      else if (left !== undefined) rows.push({ left, right: '', cls: 'left' });
+      else rows.push({ left: '', right, cls: 'right' });
+    }
+    pendingLeft.length = 0;
+    pendingRight.length = 0;
+  };
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      flush();
+      rows.push({ left: a[i], right: b[j], cls: 'same' });
+      i++; j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      pendingLeft.push(a[i++]);
+    } else {
+      pendingRight.push(b[j++]);
+    }
+  }
+  while (i < n) pendingLeft.push(a[i++]);
+  while (j < m) pendingRight.push(b[j++]);
+  flush();
+  return rows;
+}
+
+const diffByKind = computed(() => {
+  const payloads = examplePayloads.value;
+  if (!payloads) return [];
+  return (['AR', 'RE'] as const)
+    .map((kind) => ({
+      kind,
+      rows: diffRows(
+        payloadLines(payloads.a, kind, showMeta.value),
+        payloadLines(payloads.b, kind, showMeta.value)
+      )
+    }))
+    .filter((d) => d.rows.length > 0);
+});
 
 function shortSignature(signature: string): string {
   return signature.replace(/\s*\[[^\]]*\]\s*$/, '').replace(/^[^(]*::/, '');
 }
+// (raw single-side pretty-printing was replaced by the aligned diff grid)
 
 const statusLabel: Record<string, string> = {
   output_changed: 'same input, different output',
@@ -168,24 +272,22 @@ const statusLabel: Record<string, string> = {
           <div v-if="loadingExamples" class="centered">
             <ProgressSpinner style="width:1.5rem;height:1.5rem" />
           </div>
-          <div v-else-if="examplePayloads" class="dv-columns">
-            <div class="dv-col">
+          <div v-else-if="examplePayloads">
+            <div class="dv-diff-head">
               <h3>A <code class="mono muted">{{ g.example_call_a ?? '—' }}</code></h3>
-              <template v-for="kind in ['AR', 'RE']" :key="'a' + kind">
-                <div v-if="pretty(examplePayloads.a, kind)" class="dv-payload">
-                  <span class="dv-kind">{{ kind }}</span>
-                  <pre class="mono">{{ pretty(examplePayloads.a, kind) }}</pre>
-                </div>
-              </template>
-            </div>
-            <div class="dv-col">
               <h3>B <code class="mono muted">{{ g.example_call_b ?? '—' }}</code></h3>
-              <template v-for="kind in ['AR', 'RE']" :key="'b' + kind">
-                <div v-if="pretty(examplePayloads.b, kind)" class="dv-payload">
-                  <span class="dv-kind">{{ kind }}</span>
-                  <pre class="mono">{{ pretty(examplePayloads.b, kind) }}</pre>
-                </div>
-              </template>
+              <label class="dv-toggle">
+                <input type="checkbox" v-model="showMeta" /> show identity metadata (__meta__)
+              </label>
+            </div>
+            <div v-for="d in diffByKind" :key="d.kind" class="dv-payload">
+              <span class="dv-kind">{{ d.kind }}</span>
+              <div class="dv-diff-grid mono">
+                <template v-for="(row, idx) in d.rows" :key="idx">
+                  <div class="dcell dl" :class="'d-' + row.cls">{{ row.left }}</div>
+                  <div class="dcell dr" :class="'d-' + row.cls">{{ row.right }}</div>
+                </template>
+              </div>
             </div>
           </div>
         </div>
@@ -259,20 +361,35 @@ const statusLabel: Record<string, string> = {
 .dv-exc { color: #f87171; }
 
 .dv-detail { padding: 0.5rem 0.75rem 1rem; }
-.dv-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-.dv-col h3 { margin: 0 0 0.4rem; font-size: 0.8rem; color: var(--text-secondary); }
+.dv-diff-head {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+  align-items: baseline; margin: 0.25rem 0 0.5rem 2.8rem; position: relative;
+}
+.dv-diff-head h3 { margin: 0; font-size: 0.8rem; color: var(--text-secondary); }
+.dv-diff-head .dv-toggle { position: absolute; right: 0; top: 0; margin-left: 0; }
 .dv-payload { display: flex; gap: 0.6rem; margin: 0.25rem 0; align-items: flex-start; }
 .dv-kind {
   flex-shrink: 0; width: 2.2rem; text-align: center;
   font-size: 0.7rem; font-weight: 700; color: var(--text-muted);
   border: 1px solid var(--border); border-radius: 4px; padding: 0.1rem 0;
 }
-.dv-payload pre {
-  margin: 0; padding: 0.5rem 0.75rem;
+/* One grid, one scroll container: the two sides are aligned row by row and
+   scroll together by construction. */
+.dv-diff-grid {
+  flex: 1; min-width: 0;
+  display: grid; grid-template-columns: 1fr 1fr;
   background: var(--bg-elevated); border: 1px solid var(--border);
-  border-radius: 6px; overflow-x: auto; max-height: 24rem;
-  color: var(--text-secondary); flex: 1; min-width: 0;
+  border-radius: 6px; overflow: auto; max-height: 28rem;
 }
+.dcell {
+  padding: 0 0.75rem; white-space: pre; min-height: 1.25rem; line-height: 1.25rem;
+  color: var(--text-secondary);
+}
+.dcell.dl { border-right: 1px solid var(--border); }
+.dcell.d-changed { background: rgba(251, 191, 36, 0.13); color: var(--text-primary); }
+.dcell.dl.d-left  { background: rgba(248, 113, 113, 0.13); color: var(--text-primary); }
+.dcell.dr.d-right { background: rgba(52, 211, 153, 0.13); color: var(--text-primary); }
+.dcell.dr.d-left, .dcell.dl.d-right { background: rgba(255, 255, 255, 0.02); }
 .dv-empty { padding: 2rem 1.5rem; max-width: 46rem; }
 .muted { color: var(--text-muted); }
 .centered { display: flex; justify-content: center; padding: 1.5rem; }

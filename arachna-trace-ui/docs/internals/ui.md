@@ -243,10 +243,18 @@ input" — and compares the *sets* of RE root hashes per group:
 
 The screen shows summary chips, the group list (`output_changed`
 first, `unchanged` hidden by default), and on expand loads one example
-call from each side for a side-by-side read of the captured AR/RE. In
-line with the offload-to-server rule, the diff itself is hash algebra
-in ClickHouse/Java — no payload JSON reaches the browser until the
-user drills into a group.
+call from each side. The two payloads render as ONE aligned line-diff
+grid (LCS at line level) inside a single scroll container — the sides
+cannot scroll apart, and each aligned row is tinted same / changed /
+only-A / only-B, so the difference is marked in place. Marking here is
+consistent with the philosophy's "comparable when the user asks"
+clause: the user explicitly chose two sessions and expanded the group.
+`__meta__` identity fields (object id, own_hash) are hidden from the
+diff by default — they are run-local and differ between any two
+recordings, which would mark nearly every line — with a toggle to show
+them. In line with the offload-to-server rule, the group-level diff is
+hash algebra in ClickHouse/Java — no payload JSON reaches the browser
+until the user drills into a group.
 
 **Honest limits (also stated in the workflow doc):** inputs must repeat
 between the two runs for groups to align — nondeterministic argument
