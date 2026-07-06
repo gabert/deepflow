@@ -5,8 +5,17 @@ import com.github.gabert.arachna.trace.agent.bootstrap.RequestContext;
 import com.github.gabert.arachna.trace.agent.spi.SpiBootstrap;
 import com.github.gabert.arachna.trace.codec.envelope.ObjectIdRegistry;
 import com.github.gabert.arachna.trace.recorder.buffer.RecordBuffer;
-import com.github.gabert.arachna.trace.recorder.record.BinaryUtil;
+import com.github.gabert.arachna.trace.recorder.record.ArgumentsExitRecord;
+import com.github.gabert.arachna.trace.recorder.record.ArgumentsRecord;
+import com.github.gabert.arachna.trace.recorder.record.ExceptionRecord;
+import com.github.gabert.arachna.trace.recorder.record.MethodEndRecord;
+import com.github.gabert.arachna.trace.recorder.record.MethodStartRecord;
 import com.github.gabert.arachna.trace.recorder.record.RecordWriter;
+import com.github.gabert.arachna.trace.recorder.record.ReturnRecord;
+import com.github.gabert.arachna.trace.recorder.record.SequenceRecord;
+import com.github.gabert.arachna.trace.recorder.record.ThisInstanceRecord;
+import com.github.gabert.arachna.trace.recorder.record.ThisInstanceRefRecord;
+import com.github.gabert.arachna.trace.recorder.record.TraceRecord;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -133,8 +142,8 @@ public class RequestRecorder {
             UUID parentCallId = RequestContext.peekParentCallId();
             callId = randomCallId();
 
-            byte[] sequenceRecord = emitSq
-                    ? RecordWriter.sequence(callId, seqCounter.getAndIncrement())
+            SequenceRecord sequenceRecord = emitSq
+                    ? new SequenceRecord(callId, seqCounter.getAndIncrement())
                     : null;
 
             if (serializeValues) {
@@ -143,11 +152,9 @@ public class RequestRecorder {
                 record = buildSerializedEntry(meta, sessionId, threadName, timestamp, callerLine,
                         requestId, callId, parentCallId, sequenceRecord, selfForCapture, argsForCapture);
             } else {
-                byte[] startRecord = RecordWriter.logEntrySimple(sessionId, meta.signature(), threadName,
-                        timestamp, callerLine, requestId, callId, parentCallId);
-                record = sequenceRecord != null
-                        ? BinaryUtil.concat(startRecord, sequenceRecord)
-                        : startRecord;
+                MethodStartRecord startRecord = new MethodStartRecord(sessionId, meta.signature(),
+                        threadName, timestamp, callerLine, requestId, callId, parentCallId);
+                record = RecordWriter.frames(startRecord, sequenceRecord);
             }
         } catch (Throwable t) {
             // Roll back depth so the next root entry on this thread still
@@ -198,30 +205,27 @@ public class RequestRecorder {
             byte[] record;
             if (serializeValues) {
                 MethodMeta meta = MethodMetaCache.get(declaringType, methodKey);
-                byte[] exitArgsCbor = (emitAx && emitAr && allArguments != null)
-                        ? valueEncoder.encode(namedArgs(meta.paramKeys(), allArguments))
+                ArgumentsExitRecord exitArgsRecord = (emitAx && emitAr && allArguments != null)
+                        ? new ArgumentsExitRecord(valueEncoder.encode(namedArgs(meta.paramKeys(), allArguments)))
                         : null;
 
-                byte[] returnRecord;
+                TraceRecord returnRecord;
                 if (throwable != null) {
                     // Exceptions are recorded regardless of emit_tags: RT is the
                     // structural source of is_exception downstream, and filtering
                     // a display tag must not turn an exceptional exit into VOID.
-                    returnRecord = RecordWriter.exception(valueEncoder.encode(buildExceptionData(throwable)));
+                    returnRecord = new ExceptionRecord(valueEncoder.encode(buildExceptionData(throwable)));
                 } else if (!emitReturnRecord) {
-                    returnRecord = RecordWriter.returnVoid();
+                    returnRecord = ReturnRecord.ofVoid();
                 } else {
                     returnRecord = meta.isVoidReturn()
-                            ? RecordWriter.returnVoid()
-                            : RecordWriter.returnValue(valueEncoder.encode(returned));
+                            ? ReturnRecord.ofVoid()
+                            : new ReturnRecord(valueEncoder.encode(returned));
                 }
 
-                byte[] endRecord = RecordWriter.methodEnd(sessionId, threadName, timestamp, requestId, callId);
-                byte[] exitArgsRecord = exitArgsCbor != null
-                        ? RecordWriter.argumentsExit(exitArgsCbor)
-                        : new byte[0];
-
-                record = BinaryUtil.concat(endRecord, returnRecord, exitArgsRecord);
+                MethodEndRecord endRecord = new MethodEndRecord(sessionId, threadName, timestamp,
+                        requestId, callId);
+                record = RecordWriter.frames(endRecord, returnRecord, exitArgsRecord);
             } else {
                 record = RecordWriter.methodEnd(sessionId, threadName, timestamp, requestId, callId);
             }
@@ -244,26 +248,26 @@ public class RequestRecorder {
                                          long timestamp, int callerLine,
                                          long requestId,
                                          UUID callId, UUID parentCallId,
-                                         byte[] sequenceRecord,
+                                         SequenceRecord sequenceRecord,
                                          Object self, Object[] allArguments) throws IOException {
-        byte[] startRecord = RecordWriter.logEntrySimple(sessionId, meta.signature(), threadName, timestamp,
-                callerLine, requestId, callId, parentCallId);
+        MethodStartRecord startRecord = new MethodStartRecord(sessionId, meta.signature(), threadName,
+                timestamp, callerLine, requestId, callId, parentCallId);
 
-        byte[] thisRecord = null;
+        TraceRecord thisRecord = null;
         if (self != null) {
             if (expandThis) {
-                thisRecord = RecordWriter.thisInstance(valueEncoder.encode(self));
+                thisRecord = new ThisInstanceRecord(valueEncoder.encode(self));
             } else {
-                thisRecord = RecordWriter.thisInstanceRef(ObjectIdRegistry.idOf(self));
+                thisRecord = new ThisInstanceRefRecord(ObjectIdRegistry.idOf(self));
             }
         }
 
-        byte[] argsRecord = null;
+        ArgumentsRecord argsRecord = null;
         if (allArguments != null) {
-            argsRecord = RecordWriter.arguments(valueEncoder.encode(namedArgs(meta.paramKeys(), allArguments)));
+            argsRecord = new ArgumentsRecord(valueEncoder.encode(namedArgs(meta.paramKeys(), allArguments)));
         }
 
-        return BinaryUtil.concat(startRecord, sequenceRecord, thisRecord, argsRecord);
+        return RecordWriter.frames(startRecord, sequenceRecord, thisRecord, argsRecord);
     }
 
     /**

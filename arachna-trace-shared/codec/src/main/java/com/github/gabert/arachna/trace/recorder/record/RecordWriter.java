@@ -15,6 +15,37 @@ public final class RecordWriter {
 
     private RecordWriter() {}
 
+    // --- Composite: single-allocation frame concatenation ---
+
+    /**
+     * Marshals the given records into one contiguous frame sequence with a
+     * single output allocation, skipping {@code null} entries. Byte-identical
+     * to concatenating each record's {@link TraceRecord#toFrame()}, but each
+     * payload is copied exactly once (into the output) instead of twice
+     * (into its own frame, then into the concatenation) — the agent's hot
+     * path uses this for composite entry/exit records.
+     */
+    public static byte[] frames(TraceRecord... records) {
+        byte[][] payloads = new byte[records.length][];
+        int total = 0;
+        for (int i = 0; i < records.length; i++) {
+            if (records[i] == null) continue;
+            payloads[i] = records[i].payloadBytes();
+            total += RecordType.HEADER_SIZE + payloads[i].length;
+        }
+        byte[] out = new byte[total];
+        int pos = 0;
+        for (int i = 0; i < records.length; i++) {
+            byte[] payload = payloads[i];
+            if (payload == null) continue;
+            out[pos] = records[i].typeByte();
+            pos = BinaryUtil.putInt(out, pos + 1, payload.length);
+            System.arraycopy(payload, 0, out, pos, payload.length);
+            pos += payload.length;
+        }
+        return out;
+    }
+
     // --- Composite: full method entry (start + this + arguments) ---
 
     public static byte[] logEntry(String sessionId, String signature, String threadName,

@@ -34,6 +34,15 @@ public final class ObjectIdRegistry {
    private ObjectIdRegistry() {
    }
 
+   // Reusable per-thread lookup key so the hit path allocates nothing.
+   // idOf() runs once per envelope node during serialization; allocating a
+   // WeakReference per lookup (the previous design) made every hit produce
+   // reference-object garbage, which the GC processes in a dedicated phase —
+   // the cost scales with allocation rate, not liveness. The key holds a
+   // strong ref only for the duration of the map probe and is cleared
+   // immediately after so it never delays collection of the probed object.
+   private static final ThreadLocal<LookupKey> LOOKUP_KEY = ThreadLocal.withInitial(LookupKey::new);
+
    // Pre-condition: caller must not pass null. EnvelopeSerializer guards
    // null at the top of its serialize() method, so this method never sees
    // a null in production. Passing null here would create a degenerate
@@ -44,9 +53,13 @@ public final class ObjectIdRegistry {
    public static long idOf(Object o) {
       expungeStale();
 
-      // Lookup key: holds a strong ref so object cannot be GC'd during lookup
-      IdentityWeakRef lookupKey = new IdentityWeakRef(o, null);
-      Long existing = MAP.get(lookupKey);
+      LookupKey lookupKey = LOOKUP_KEY.get();
+      Long existing;
+      try {
+         existing = MAP.get(lookupKey.set(o));
+      } finally {
+         lookupKey.clear();
+      }
       if (existing != null)
          return existing;
 
@@ -100,6 +113,39 @@ public final class ObjectIdRegistry {
          Object theirs = that.get();
          // == compares raw JVM memory addresses — unambiguous identity
          return mine != null && mine == theirs;
+      }
+   }
+
+   // ── Lookup key (never stored) ─────────────────────────────
+   // Probe-side counterpart of IdentityWeakRef: plain object, no Reference
+   // machinery. ConcurrentHashMap.get/remove only ever call equals on the
+   // *argument* key against stored keys, so the asymmetric equals (an
+   // IdentityWeakRef never equals a LookupKey) is safe — LookupKey instances
+   // are never inserted into the map. Stale-entry removal in expungeStale
+   // is unaffected: it removes by the very same IdentityWeakRef instance,
+   // which ConcurrentHashMap matches by reference before calling equals.
+   private static final class LookupKey {
+      private Object referent;
+      private int identityHash;
+
+      LookupKey set(Object o) {
+         this.referent = o;
+         this.identityHash = System.identityHashCode(o);
+         return this;
+      }
+
+      void clear() {
+         this.referent = null;
+      }
+
+      @Override
+      public int hashCode() {
+         return identityHash;
+      }
+
+      @Override
+      public boolean equals(Object other) {
+         return other instanceof IdentityWeakRef that && that.get() == referent;
       }
    }
 }

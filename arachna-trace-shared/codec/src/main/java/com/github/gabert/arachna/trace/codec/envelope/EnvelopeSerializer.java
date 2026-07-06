@@ -114,7 +114,12 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
 
       long id = ObjectIdRegistry.idOf(value);
 
-      if (seen.containsKey(value)) {
+      // Single map operation instead of containsKey + put: put returns the
+      // previous mapping, which is non-null exactly when the object is
+      // already being serialized higher up. Re-putting the same id for a
+      // repeated object is a no-op semantically — idOf is stable per
+      // instance — so the emitted bytes are identical to the two-step form.
+      if (seen.put(value, id) != null) {
          // This object is already being serialized higher up in the
          // call stack — emit a back-reference instead of recursing.
          gen.writeStartObject();
@@ -125,8 +130,6 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
          gen.writeEndObject();
          return;
       }
-
-      seen.put(value, id);
 
       // ── JPA proxy / wrapper resolution ──────────────────
       // If a JpaProxyResolver is configured, give it first shot at
@@ -191,9 +194,20 @@ final class EnvelopeSerializer extends JsonSerializer<Object> implements Context
    // Hibernate's ByteBuddy proxies use "$HibernateProxy$". A plain nested
    // class that extends its enclosing class (Foo$Sub extends Foo) has a
    // single-dollar name and must NOT be treated as a proxy.
+   //
+   // Proxy-ness is a property of the Class, so the string scans run once
+   // per class via ClassValue instead of once per serialized node; entries
+   // are released when the class is unloaded.
+   private static final ClassValue<Boolean> PROXY_CLASS = new ClassValue<>() {
+      @Override
+      protected Boolean computeValue(Class<?> cls) {
+         if (Proxy.isProxyClass(cls)) return Boolean.TRUE;
+         String name = cls.getName();
+         return name.contains("$$") || name.contains("$HibernateProxy$");
+      }
+   };
+
    private static boolean isProxy(Class<?> cls) {
-      if (Proxy.isProxyClass(cls)) return true;
-      String name = cls.getName();
-      return name.contains("$$") || name.contains("$HibernateProxy$");
+      return PROXY_CLASS.get(cls);
    }
 }
