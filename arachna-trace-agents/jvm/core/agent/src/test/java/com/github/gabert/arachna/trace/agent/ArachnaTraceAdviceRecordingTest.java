@@ -577,6 +577,32 @@ class ArachnaTraceAdviceRecordingTest {
                 "No truncation when max_value_size=0");
     }
 
+    // ==================== REENTRANCY GUARD (B-07) ====================
+
+    @Test
+    void reentrantRecordingIsRefused() {
+        // While a recorder call is encoding values, instrumented code invoked
+        // by the serializer (e.g. Jackson calling a traced enum's values())
+        // must not be recorded — B-07 in KNOWN_BUGS.md was an unbounded
+        // recursion ending in StackOverflowError.
+        RequestContext.State ctx = RequestContext.state();
+        assertTrue(ctx.enterRecorder(), "guard must be clear before the test");
+        try {
+            assertFalse(recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{}),
+                    "nested recordEntry must refuse to record while the guard is set");
+            assertNull(buffer.poll(), "no record may be emitted by a refused nested entry");
+            assertEquals(0, RequestContext.currentDepth(),
+                    "refused nested entry must not touch depth");
+        } finally {
+            ctx.exitRecorder();
+        }
+
+        // Guard released — recording works normally again.
+        assertTrue(recorder.recordEntry(voidMethod, new ArrayList<>(), new Object[]{}));
+        recorder.recordExit(voidMethod, null, null, new Object[]{});
+        assertNotNull(buffer.poll());
+    }
+
     // ==================== BULLETPROOF ENTRY/EXIT CONTRACT ====================
 
     @Test

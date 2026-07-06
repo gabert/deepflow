@@ -129,9 +129,24 @@ public class RequestRecorder {
      */
     public boolean recordEntry(Class<?> declaringType, String methodKey, Object self, Object[] allArguments) {
         if (recordBuffer == null) return false;
-        spi.initJpaProxyResolverOnce();
 
         RequestContext.State ctx = RequestContext.state();
+        // Reentrancy guard: value serialization below can invoke instrumented
+        // application code (e.g. Jackson calling a traced enum's values()).
+        // Such nested calls must not be recorded — without this guard they
+        // recurse straight back here until the stack overflows.
+        if (!ctx.enterRecorder()) return false;
+        try {
+            return doRecordEntry(ctx, declaringType, methodKey, self, allArguments);
+        } finally {
+            ctx.exitRecorder();
+        }
+    }
+
+    private boolean doRecordEntry(RequestContext.State ctx, Class<?> declaringType, String methodKey,
+                                  Object self, Object[] allArguments) {
+        spi.initJpaProxyResolverOnce();
+
         UUID callId;
         byte[] record;
         boolean depthIncremented = false;
@@ -215,6 +230,10 @@ public class RequestRecorder {
         UUID callId = ctx.popCallId();
         if (callId == null) return;
         long requestId = ctx.endRequest();
+        // Same reentrancy guard as recordEntry: encoding the return value /
+        // exit args can invoke instrumented code. Nested entries are refused
+        // while set (their exits are suppressed by the entry contract).
+        if (!ctx.enterRecorder()) return;
         try {
             ThreadStringCache strings = STRING_CACHE.get();
             byte[] threadNameBytes = strings.threadName(Thread.currentThread().getName());
@@ -255,6 +274,8 @@ public class RequestRecorder {
         } catch (Throwable t) {
             System.err.println("[ArachnaTrace] Error recording exit.");
             t.printStackTrace();
+        } finally {
+            ctx.exitRecorder();
         }
     }
 

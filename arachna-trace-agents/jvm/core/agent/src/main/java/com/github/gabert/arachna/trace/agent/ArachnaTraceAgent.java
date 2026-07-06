@@ -140,6 +140,10 @@ public class ArachnaTraceAgent {
         // ThreadLocals would be different.
         String[] classResources = {
                 "com/github/gabert/arachna/trace/agent/bootstrap/RequestContext.class",
+                // Nested classes are separate class files — every one used by
+                // RequestContext must ship in the bootstrap jar or its static
+                // initializer throws NoClassDefFoundError at premain.
+                "com/github/gabert/arachna/trace/agent/bootstrap/RequestContext$State.class",
                 "com/github/gabert/arachna/trace/agent/bootstrap/PropagatingRunnable.class",
                 "com/github/gabert/arachna/trace/agent/bootstrap/PropagatingCallable.class"
         };

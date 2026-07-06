@@ -42,6 +42,27 @@ public class RequestContext {
         private long requestId;
         private int depth;
         private Deque<UUID> callStack = new ArrayDeque<>();
+        private boolean inRecorder;
+
+        /**
+         * Reentrancy guard. Serializing captured values can invoke
+         * instrumented application code — the canonical case is Jackson's
+         * enum handling calling the traced enum's {@code values()} via
+         * {@code Class.getEnumConstants} — which would recurse back into
+         * the recorder (unbounded: the nested recording serializes the
+         * same way). While the flag is set, recordEntry refuses nested
+         * recording; the nested exit is then suppressed by the
+         * entry-returned-false contract.
+         */
+        public boolean enterRecorder() {
+            if (inRecorder) return false;
+            inRecorder = true;
+            return true;
+        }
+
+        public void exitRecorder() {
+            inRecorder = false;
+        }
 
         /**
          * Begin a request: at depth 0 assign a fresh request ID, then

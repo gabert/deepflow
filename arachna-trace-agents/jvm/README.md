@@ -104,6 +104,7 @@ JVM-specific docs in [docs/](docs/):
 
 - [Getting Started](docs/getting-started.md) -- build, attach, configure
 - [Agent Configuration](docs/reference/agent-config.md) -- all options for the JVM agent
+- [Performance](docs/reference/performance.md) -- measured agent overhead per traced call, with and without value serialization
 - [Architecture](docs/architecture.md) -- JVM agent data flow and modules
 
 Generic any-agent docs in [../docs/](../docs/):

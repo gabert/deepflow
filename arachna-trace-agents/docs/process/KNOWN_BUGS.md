@@ -33,6 +33,7 @@ For *open* items and what to do about them, see `ROADMAP.md`.
 | B-04 | High     | OPEN     | Architectural | No version-aware parsing → rolling deploys mis-parse |
 | B-05 | Medium   | OPEN     | Correctness | JVM crash mid-method leaves orphan UUID on `CALL_STACK` |
 | B-06 | Medium   | OPEN     | Correctness | Failed entry on request's originating root → spurious root |
+| B-07 | High     | FIXED    | Correctness | Recorder reentrancy via value serialization → StackOverflowError |
 | L-01 | Medium   | FIXED    | Leak        | `RecordParser.openCalls` map — never evicts |
 | L-02 | Medium   | FIXED    | Leak        | `ClickHouseSink.openRequests` map — never evicts |
 | L-03 | Medium   | FIXED    | Leak        | `ClickHouseSink.seenSessions` set — grows monotonically |
@@ -70,6 +71,32 @@ Worse, `endRequest()` ran first and double-decremented depth.
 **Fix:** Pop reordered to come first; bail before any state mutation
 if pop returns null. Regression test:
 `ArachnaTraceAdviceRecordingTest.recordExitWithoutMatchingEntryIsSilentlyIgnored`.
+
+---
+
+### B-07 — Recorder reentrancy via value serialization → StackOverflowError
+
+**Status:** FIXED.
+**Where:** `RequestRecorder.recordEntry/recordExit` (core/agent).
+
+**Was:** Encoding captured values can invoke instrumented application
+code. The canonical trigger: Jackson's enum handling calls the traced
+enum's `values()` via `Class.getEnumConstants`. That nested call hit
+`recordEntry`, whose own serialization re-triggered the same path —
+unbounded recursion ending in `StackOverflowError` (and transformer
+assertion spam when classes loaded mid-storm). Any traced class whose
+methods Jackson invokes during serialization (enums, custom
+collections/iterators) could trigger it.
+
+**Fix:** Per-thread reentrancy guard (`RequestContext.State.enterRecorder`).
+While a recorder call is encoding, nested `recordEntry` refuses to
+record (returns false), and the entry-returned-false contract
+suppresses the nested exit. Nested calls execute normally — they are
+just not traced, which is the correct trace shape: they are part of the
+agent's own capture work, not the application's request. Regression
+test: `ArachnaTraceAdviceRecordingTest.reentrantRecordingIsRefused`;
+end-to-end trigger reproduced by the enterprise benchmark workload
+(enum field inside a traced package).
 
 ---
 
