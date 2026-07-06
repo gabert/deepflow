@@ -1,6 +1,8 @@
 package com.github.gabert.arachna.trace.agent;
 
 import com.github.gabert.arachna.trace.agent.advice.ArachnaTraceAdvice;
+import com.github.gabert.arachna.trace.agent.advice.ArachnaTraceAdviceNoAx;
+import com.github.gabert.arachna.trace.agent.advice.ArachnaTraceAdviceStructural;
 import com.github.gabert.arachna.trace.agent.advice.ExecutorAdvice;
 import com.github.gabert.arachna.trace.agent.advice.ForkJoinAdvice;
 import com.github.gabert.arachna.trace.agent.recording.RequestRecorder;
@@ -63,7 +65,7 @@ public class ArachnaTraceAgent {
             ArachnaTraceAdvice.setup(new RequestRecorder(manager.getBuffer(), agentConfig));
         }
 
-        Advice advice = Advice.to(ArachnaTraceAdvice.class);
+        Advice advice = selectAdvice(agentConfig);
 
         ElementMatcher.Junction<TypeDescription> matcherInclude = ElementMatchers.none();
         for (String regex : agentConfig.getMatchersInclude()) {
@@ -95,6 +97,11 @@ public class ArachnaTraceAgent {
                             JavaModule module,
                             ProtectionDomain pd) -> builder.visit(
                                     advice.on(ElementMatchers.isMethod()
+                                            // Bridge/synthetic methods delegate to the real
+                                            // implementation — tracing them records every
+                                            // generic-override call twice.
+                                            .and(ElementMatchers.not(ElementMatchers.isBridge()))
+                                            .and(ElementMatchers.not(ElementMatchers.isSynthetic()))
                                             .and(ElementMatchers.not(ElementMatchers.isGetter()))
                                             .and(ElementMatchers.not(ElementMatchers.isSetter()))
                                             .and(ElementMatchers.not(ElementMatchers.named("toString")))
@@ -107,6 +114,22 @@ public class ArachnaTraceAgent {
         if (agentConfig.isPropagateRequestId()) {
             installExecutorInstrumentation(instrumentation);
         }
+    }
+
+    /**
+     * Picks the advice variant matching the configuration so the inlined
+     * bytecode never boxes values the recorder would discard: structural
+     * mode binds no values at all; the AX-off variant (default tag set)
+     * skips the exit-side argument array.
+     */
+    private static Advice selectAdvice(AgentConfig config) {
+        if (!config.isSerializeValues()) {
+            return Advice.to(ArachnaTraceAdviceStructural.class);
+        }
+        boolean captureExitArgs = config.shouldEmit("AX") && config.shouldEmit("AR");
+        return captureExitArgs
+                ? Advice.to(ArachnaTraceAdvice.class)
+                : Advice.to(ArachnaTraceAdviceNoAx.class);
     }
 
     private static void injectBootstrapClasses(Instrumentation instrumentation) {

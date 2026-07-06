@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
@@ -26,6 +27,13 @@ import java.util.stream.Stream;
  * <p>Flag fields (expandThis, serializeValues, emit*) are snapshotted from
  * the config in the constructor so the hot path does not pay a HashMap
  * lookup per call.</p>
+ *
+ * <p>The hot-path entry points identify the method by declaring class +
+ * {@code name+descriptor} key (both constant-pool loads in the inlined
+ * advice); everything derived from the method — signature string, AR/AX
+ * keys, void-ness — comes from {@link MethodMetaCache} and is resolved once
+ * per method, not per call. The {@link Method}-typed overloads exist for
+ * direct (non-advice) callers such as tests.</p>
  */
 public class RequestRecorder {
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
@@ -40,6 +48,7 @@ public class RequestRecorder {
     private final boolean emitReturnRecord;
     private final boolean emitAx;
     private final boolean emitSq;
+    private final boolean emitCl;
 
     /**
      * Per-agent-run sequence counter. Incremented on each successful method
@@ -66,6 +75,9 @@ public class RequestRecorder {
         this.emitReturnRecord = config.shouldEmit("RT") || config.shouldEmit("RE");
         this.emitAx = config.shouldEmit("AX");
         this.emitSq = config.shouldEmit("SQ");
+        // CL requires a stack walk per entry — skip it entirely when the tag
+        // is filtered out.
+        this.emitCl = config.shouldEmit("CL");
         // Single decision point — the resolver itself short-circuits to
         // positional integer keys without touching its cache when this
         // flag is false. The recorder doesn't branch per-call.
@@ -91,7 +103,7 @@ public class RequestRecorder {
      * subsequent call ever pairs against a wrong UUID. Worst case is a
      * dropped (silently ignored) call; never a wrong one.</p>
      */
-    public boolean recordEntry(Method method, Object self, Object[] allArguments) {
+    public boolean recordEntry(Class<?> declaringType, String methodKey, Object self, Object[] allArguments) {
         if (recordBuffer == null) return false;
         spi.initJpaProxyResolverOnce();
 
@@ -99,17 +111,19 @@ public class RequestRecorder {
         byte[] record;
         boolean depthIncremented = false;
         try {
-            String signature = MethodSignatureFormatter.format(method);
+            MethodMeta meta = MethodMetaCache.get(declaringType, methodKey);
             String threadName = Thread.currentThread().getName();
             long timestamp = System.currentTimeMillis();
             // Stack at this point: [recordEntry, target_method, caller_of_target, ...]
             // ByteBuddy inlines onEnter into target_method's bytecode, so the call
             // to recordEntry lives there at runtime. skip(2) walks past both frames
             // and lands on the actual caller of the traced method.
-            int callerLine = STACK_WALKER
-                    .walk(s -> s.skip(2).findFirst())
-                    .map(StackWalker.StackFrame::getLineNumber)
-                    .orElse(0);
+            int callerLine = emitCl
+                    ? STACK_WALKER
+                            .walk(s -> s.skip(2).findFirst())
+                            .map(StackWalker.StackFrame::getLineNumber)
+                            .orElse(0)
+                    : 0;
 
             String sessionId = spi.getSessionIdResolver().resolve();
 
@@ -117,7 +131,7 @@ public class RequestRecorder {
             depthIncremented = true;
 
             UUID parentCallId = RequestContext.peekParentCallId();
-            callId = UUID.randomUUID();
+            callId = randomCallId();
 
             byte[] sequenceRecord = emitSq
                     ? RecordWriter.sequence(callId, seqCounter.getAndIncrement())
@@ -126,11 +140,11 @@ public class RequestRecorder {
             if (serializeValues) {
                 Object selfForCapture = emitTi ? self : null;
                 Object[] argsForCapture = emitAr ? allArguments : null;
-                record = buildSerializedEntry(method, sessionId, signature, threadName, timestamp, callerLine,
+                record = buildSerializedEntry(meta, sessionId, threadName, timestamp, callerLine,
                         requestId, callId, parentCallId, sequenceRecord, selfForCapture, argsForCapture);
             } else {
-                byte[] startRecord = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp,
-                        callerLine, requestId, callId, parentCallId);
+                byte[] startRecord = RecordWriter.logEntrySimple(sessionId, meta.signature(), threadName,
+                        timestamp, callerLine, requestId, callId, parentCallId);
                 record = sequenceRecord != null
                         ? BinaryUtil.concat(startRecord, sequenceRecord)
                         : startRecord;
@@ -157,9 +171,14 @@ public class RequestRecorder {
         return true;
     }
 
+    /** {@link Method}-typed convenience for direct (non-advice) callers. */
+    public boolean recordEntry(Method method, Object self, Object[] allArguments) {
+        return recordEntry(method.getDeclaringClass(), MethodMetaCache.keyOf(method), self, allArguments);
+    }
+
     // --- Record exit ---
 
-    public void recordExit(Method method, Object returned, Throwable throwable,
+    public void recordExit(Class<?> declaringType, String methodKey, Object returned, Throwable throwable,
                            Object[] allArguments) {
         if (recordBuffer == null) return;
         // Pop FIRST and bail if empty: the bulletproof contract guarantees
@@ -178,8 +197,9 @@ public class RequestRecorder {
 
             byte[] record;
             if (serializeValues) {
+                MethodMeta meta = MethodMetaCache.get(declaringType, methodKey);
                 byte[] exitArgsCbor = (emitAx && emitAr && allArguments != null)
-                        ? valueEncoder.encode(namedArgs(method, allArguments))
+                        ? valueEncoder.encode(namedArgs(meta.paramKeys(), allArguments))
                         : null;
 
                 byte[] returnRecord;
@@ -191,8 +211,7 @@ public class RequestRecorder {
                 } else if (!emitReturnRecord) {
                     returnRecord = RecordWriter.returnVoid();
                 } else {
-                    boolean isVoid = Void.TYPE.equals(method.getGenericReturnType());
-                    returnRecord = isVoid
+                    returnRecord = meta.isVoidReturn()
                             ? RecordWriter.returnVoid()
                             : RecordWriter.returnValue(valueEncoder.encode(returned));
                 }
@@ -213,17 +232,22 @@ public class RequestRecorder {
         }
     }
 
+    /** {@link Method}-typed convenience for direct (non-advice) callers. */
+    public void recordExit(Method method, Object returned, Throwable throwable, Object[] allArguments) {
+        recordExit(method.getDeclaringClass(), MethodMetaCache.keyOf(method), returned, throwable, allArguments);
+    }
+
     // --- Private: entry record building ---
 
-    private byte[] buildSerializedEntry(Method method,
-                                         String sessionId, String signature, String threadName,
+    private byte[] buildSerializedEntry(MethodMeta meta,
+                                         String sessionId, String threadName,
                                          long timestamp, int callerLine,
                                          long requestId,
                                          UUID callId, UUID parentCallId,
                                          byte[] sequenceRecord,
                                          Object self, Object[] allArguments) throws IOException {
-        byte[] startRecord = RecordWriter.logEntrySimple(sessionId, signature, threadName, timestamp, callerLine,
-                requestId, callId, parentCallId);
+        byte[] startRecord = RecordWriter.logEntrySimple(sessionId, meta.signature(), threadName, timestamp,
+                callerLine, requestId, callId, parentCallId);
 
         byte[] thisRecord = null;
         if (self != null) {
@@ -236,22 +260,37 @@ public class RequestRecorder {
 
         byte[] argsRecord = null;
         if (allArguments != null) {
-            argsRecord = RecordWriter.arguments(valueEncoder.encode(namedArgs(method, allArguments)));
+            argsRecord = RecordWriter.arguments(valueEncoder.encode(namedArgs(meta.paramKeys(), allArguments)));
         }
 
         return BinaryUtil.concat(startRecord, sequenceRecord, thisRecord, argsRecord);
     }
 
     /**
-     * Wraps an {@code Object[]} of arguments into a key-preserving
-     * {@link LinkedHashMap}. Keys come from {@link ParameterNamesResolver}
-     * — strings when real names are available, integers when not — and
-     * the recorder is agnostic to which: AR/AX is always a CBOR map
-     * downstream regardless of source. Order matches declaration order.
+     * Random (v4) call ID from {@link ThreadLocalRandom}. Call IDs need
+     * uniqueness, not unpredictability — the shared {@code SecureRandom}
+     * behind {@code UUID.randomUUID()} is synchronized and becomes a
+     * cross-thread contention point on the hot path. Version/variant bits
+     * are set properly, so the all-zero "no UUID" wire sentinel can never
+     * be produced.
      */
-    private static Map<Object, Object> namedArgs(Method method, Object[] allArguments) {
-        Object[] keys = ParameterNamesResolver.resolve(method);
-        Map<Object, Object> map = new LinkedHashMap<>(keys.length);
+    private static UUID randomCallId() {
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        long msb = (random.nextLong() & 0xFFFFFFFFFFFF0FFFL) | 0x0000000000004000L;
+        long lsb = (random.nextLong() & 0x3FFFFFFFFFFFFFFFL) | 0x8000000000000000L;
+        return new UUID(msb, lsb);
+    }
+
+    /**
+     * Wraps an {@code Object[]} of arguments into a key-preserving
+     * {@link LinkedHashMap}. Keys come from the method's cached
+     * {@link MethodMeta} — strings when real names are available, integers
+     * when not — and the recorder is agnostic to which: AR/AX is always a
+     * CBOR map downstream regardless of source. Order matches declaration
+     * order.
+     */
+    private static Map<Object, Object> namedArgs(Object[] keys, Object[] allArguments) {
+        Map<Object, Object> map = new LinkedHashMap<>(keys.length * 4 / 3 + 1);
         for (int i = 0; i < keys.length; i++) {
             map.put(keys[i], i < allArguments.length ? allArguments[i] : null);
         }
