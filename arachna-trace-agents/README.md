@@ -30,6 +30,7 @@ implement regardless of source language:
 - [Argument names](jvm/docs/reference/argument-names.md) — keyed argument capture (JVM writeup; other agents will need their own)
 - [Reading a trace](docs/reading-a-trace.md) — interpreting the rendered output any agent produces
 - [Bug-finding workflow](../arachna-trace-ui/docs/internals/bug-finding.md) — forensic workflow against any conformant trace
+- [AI code audit](docs/ai-code-audit.md) — reviewing agent-generated code by recorded behavior: flow narrative, behavioral diff, liveness sweep
 - [Process docs](docs/process/) — `KNOWN_BUGS.md`, `ROADMAP.md` (project-wide)
 
 ## Implementation-specific docs

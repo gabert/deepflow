@@ -47,6 +47,10 @@ import java.util.Map;
  *       — within-call argument mutations (AR vs AX own_hash diff)</li>
  *   <li>{@code GET /api/analysis/value-search?session_id=...[&request_id=...]&value=...[&mode=substring]}
  *       — every appearance of a scalar value in a session/request</li>
+ *   <li>{@code GET /api/analysis/behavior-diff?session_a=...&session_b=...}
+ *       — behavioral diff between two sessions (hash-based)</li>
+ *   <li>{@code GET /api/analysis/observed-signatures?session_id=...}
+ *       — distinct observed signatures, for the liveness sweep</li>
  * </ul>
  */
 public class QueryHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
@@ -56,12 +60,14 @@ public class QueryHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private final SessionsApi sessions;
     private final ObjectsApi objects;
     private final AnalysisApi analysis;
+    private final BehaviorDiffApi behaviorDiff;
     private final String corsOrigin;
 
     public QueryHandler(ClickHouseClient ch, String corsOrigin) {
         this.sessions = new SessionsApi(ch);
         this.objects = new ObjectsApi(ch);
         this.analysis = new AnalysisApi(ch);
+        this.behaviorDiff = new BehaviorDiffApi(ch);
         this.corsOrigin = corsOrigin;
     }
 
@@ -139,6 +145,14 @@ public class QueryHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         // /api/analysis/value-search?session_id=...[&request_id=...]&value=...
         if (path.equals("/api/analysis/value-search")) {
             return analysis.valueSearch(params);
+        }
+        // /api/analysis/behavior-diff?session_a=...&session_b=...
+        if (path.equals("/api/analysis/behavior-diff")) {
+            return behaviorDiff.behaviorDiff(params);
+        }
+        // /api/analysis/observed-signatures?session_id=...
+        if (path.equals("/api/analysis/observed-signatures")) {
+            return behaviorDiff.observedSignatures(params);
         }
         return null;
     }

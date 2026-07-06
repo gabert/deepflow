@@ -1,7 +1,9 @@
 import type {
+  BehaviorDiffResponse,
   CallRow,
   MutationsResponse,
   ObjectHistoryRow,
+  ObservedSignatureRow,
   PayloadRow,
   RequestRow,
   SessionRow,
@@ -79,6 +81,24 @@ export const api = {
     qs.set('session_id', sessionId);
     if (requestId != null) qs.set('request_id', String(requestId));
     return request(`/analysis/mutations?${qs}`);
+  },
+  // Behavioral diff between two sessions — group calls by
+  // (signature, AR root_hash) on each side and compare output-hash
+  // sets. Hash comparison only; payloads load lazily when the user
+  // drills into a group's example calls.
+  behaviorDiff: (sessionA: string, sessionB: string): Promise<BehaviorDiffResponse> => {
+    const qs = new URLSearchParams();
+    qs.set('session_a', sessionA);
+    qs.set('session_b', sessionB);
+    return request(`/analysis/behavior-diff?${qs}`);
+  },
+  // Distinct signatures observed in a session — the "what actually ran"
+  // half of the liveness sweep (diffed against the agent's
+  // instrumentation_inventory file).
+  observedSignatures: (sessionId: string): Promise<ObservedSignatureRow[]> => {
+    const qs = new URLSearchParams();
+    qs.set('session_id', sessionId);
+    return request(`/analysis/observed-signatures?${qs}`);
   },
   valueSearch: (
     sessionId: string,

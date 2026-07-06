@@ -24,6 +24,7 @@ public class AgentConfig {
     private final boolean parameterNames;
     private final int maxValueSize;
     private final int bufferMaxRecordsPerThread;
+    private final String instrumentationInventory;
     private final String destination;
     private final Set<String> emitTags;
     private final String codeVersion;
@@ -44,6 +45,7 @@ public class AgentConfig {
         this.maxValueSize = Integer.parseInt(configMap.getOrDefault("max_value_size", "0"));
         this.bufferMaxRecordsPerThread = Integer.parseInt(
                 configMap.getOrDefault("buffer_max_records_per_thread", "0"));
+        this.instrumentationInventory = configMap.get("instrumentation_inventory");
         this.destination = configMap.getOrDefault("destination", "file");
         this.emitTags = ConfigLoader.parseEmitTags(configMap.get("emit_tags"), ConfigLoader.DEFAULT_EMIT_TAGS);
         this.codeVersion = configMap.get("code_version");
@@ -107,6 +109,16 @@ public class AgentConfig {
      */
     public int getBufferMaxRecordsPerThread() {
         return bufferMaxRecordsPerThread;
+    }
+
+    /**
+     * Path to write the instrumentation inventory to (one line per
+     * instrumented method, trace-signature format), or {@code null}
+     * (default) to disable. Input to the liveness-sweep workflow — see
+     * {@link InstrumentationInventory}.
+     */
+    public String getInstrumentationInventory() {
+        return instrumentationInventory;
     }
 
     public String getDestination() {

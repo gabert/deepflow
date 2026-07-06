@@ -67,13 +67,25 @@ function open(row: SessionRow | null): void {
   if (!row) return;
   router.push({ name: 'session-detail', params: { sessionId: row.session_id } });
 }
+
+function openNarrative(request: RequestRow): void {
+  if (!selected.value) return;
+  router.push({
+    name: 'flow-narrative',
+    params: { sessionId: selected.value.session_id, requestId: String(request.request_id) }
+  });
+}
 </script>
 
 <template>
   <section class="sessions-view">
     <header class="sv-head">
       <h1 class="page-title">Sessions</h1>
-      <Button icon="pi pi-refresh" text @click="loadList" :loading="loading" aria-label="Refresh" />
+      <div class="sv-head-actions">
+        <Button label="Behavior diff" icon="pi pi-arrows-h" text
+                @click="router.push({ name: 'behavior-diff' })" />
+        <Button icon="pi pi-refresh" text @click="loadList" :loading="loading" aria-label="Refresh" />
+      </div>
     </header>
 
     <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
@@ -153,6 +165,7 @@ function open(row: SessionRow | null): void {
               <col class="c-thread" />
               <col class="c-calls" />
               <col class="c-ms" />
+              <col class="c-narrative" />
             </colgroup>
             <thead>
               <tr>
@@ -160,6 +173,7 @@ function open(row: SessionRow | null): void {
                 <th>Thread</th>
                 <th>Calls</th>
                 <th>ms</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -172,6 +186,12 @@ function open(row: SessionRow | null): void {
                 <td class="mono">{{ r.thread_name }}</td>
                 <td class="mono num">{{ r.call_count }}</td>
                 <td class="mono num">{{ r.span_ms }}</td>
+                <td class="action-cell">
+                  <Button icon="pi pi-book" text size="small"
+                          title="Open as flow narrative (audit view)"
+                          aria-label="Open flow narrative"
+                          @click.stop="openNarrative(r)" />
+                </td>
               </tr>
             </tbody>
           </table>
@@ -258,10 +278,13 @@ function open(row: SessionRow | null): void {
 .sessions-table col.c-ts      { width: 23%; }
 .sessions-table col.c-retain  { width: 7ch; }
 
-.requests-table col.c-req    { width: 6ch; }
-.requests-table col.c-thread { width: auto; }
-.requests-table col.c-calls  { width: 7ch; }
-.requests-table col.c-ms     { width: 7ch; }
+.requests-table col.c-req       { width: 6ch; }
+.requests-table col.c-thread    { width: auto; }
+.requests-table col.c-calls     { width: 7ch; }
+.requests-table col.c-ms        { width: 7ch; }
+.requests-table col.c-narrative { width: 4.5ch; }
+.data-table td.action-cell { padding: 0; text-align: center; overflow: visible; }
+.sv-head-actions { display: flex; align-items: center; gap: 0.25rem; }
 
 /* Preview pane */
 .preview { display: flex; flex-direction: column; height: 100%; min-height: 0; }

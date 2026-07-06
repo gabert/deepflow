@@ -363,6 +363,53 @@ export interface MutationsResponse {
   perCall: MutationPerCall[];
 }
 
+// One (signature, input-hash) group in the behavioral diff between two
+// sessions, returned by /api/analysis/behavior-diff. `status` semantics:
+//   - output_changed: both sessions saw this exact input (same AR Merkle
+//     hash) but produced different return-value hash sets — same input,
+//     different output. The sharpest review signal.
+//   - added / removed: the (signature, input) combination executed in
+//     only one session — flow changed.
+//   - unchanged: identical behaviour (repeat-count differences are not
+//     flagged; nondeterministic-but-equal output sets are not flagged).
+export type BehaviorDiffStatus = 'output_changed' | 'added' | 'removed' | 'unchanged';
+
+export interface BehaviorDiffGroup {
+  signature: string;
+  ar_hash: string;
+  status: BehaviorDiffStatus;
+  count_a: number;
+  count_b: number;
+  re_hashes_a: string[];
+  re_hashes_b: string[];
+  exception_a: boolean;
+  exception_b: boolean;
+  example_call_a: string | null;
+  example_call_b: string | null;
+}
+
+export interface BehaviorDiffSummary {
+  calls_a: number;
+  calls_b: number;
+  groups: number;
+  output_changed: number;
+  added: number;
+  removed: number;
+  unchanged: number;
+}
+
+export interface BehaviorDiffResponse {
+  summary: BehaviorDiffSummary;
+  groups: BehaviorDiffGroup[];
+}
+
+// One row of /api/analysis/observed-signatures — the liveness sweep's
+// "what actually ran" half.
+export interface ObservedSignatureRow {
+  signature: string;
+  call_count: number;
+}
+
 // Single occurrence of a scalar value within a payload, returned by the
 // /api/analysis/value-search endpoint. The server's bloom-filter probe
 // over `payloads.payload_tokens` finds candidate rows; for each row the

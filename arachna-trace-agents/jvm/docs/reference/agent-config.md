@@ -152,6 +152,33 @@ total. A trace with drops is incomplete and says so.
 buffer_max_records_per_thread=0
 ```
 
+### instrumentation_inventory
+
+Path to write the **instrumentation inventory**: one line per method the
+agent wove advice into, in the exact signature format traces carry
+(`MS` tag / `calls.signature` column). Unset (default) disables it.
+
+This is one half of the *liveness sweep* (see
+[AI code audit](../../../docs/ai-code-audit.md)): after exercising the
+application — regression suite, staging traffic — diff the inventory
+against the signatures actually observed
+(`GET /api/analysis/observed-signatures?session_id=...`). Methods that
+are instrumented but never executed are code that survived a change
+(often an AI-generated refactor) without ever running.
+
+The format of both lists is identical by construction (pinned by a
+format-parity test), so the diff is a plain line comparison:
+
+```bash
+sort instrumented-methods.txt > inventory.sorted
+curl -s 'http://localhost:8082/api/analysis/observed-signatures?session_id=SID'   | jq -r '.[].signature' | sort > observed.sorted
+comm -23 inventory.sorted observed.sorted   # instrumented, never called
+```
+
+```properties
+#instrumentation_inventory=D:/temp/instrumented-methods.txt
+```
+
 ### emit_tags
 
 Controls which trace record tags are emitted. Comma-separated list.

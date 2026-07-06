@@ -89,27 +89,43 @@ public class ArachnaTraceAgent {
                         .or(ElementMatchers.nameStartsWith(AGENT_SPI_EXCLUDE_PACKAGE))
                         .or(ElementMatchers.nameContains("$$"));
 
-        new AgentBuilder.Default()
+        // One definition of "which methods get advice" — shared by the
+        // transformer and the instrumentation inventory so the inventory
+        // is exactly the set of methods that can appear in traces.
+        ElementMatcher.Junction<net.bytebuddy.description.method.MethodDescription> methodMatcher =
+                ElementMatchers.<net.bytebuddy.description.method.MethodDescription>isMethod()
+                        // Bridge/synthetic methods delegate to the real
+                        // implementation — tracing them records every
+                        // generic-override call twice.
+                        .and(ElementMatchers.not(ElementMatchers.isBridge()))
+                        .and(ElementMatchers.not(ElementMatchers.isSynthetic()))
+                        .and(ElementMatchers.not(ElementMatchers.isGetter()))
+                        .and(ElementMatchers.not(ElementMatchers.isSetter()))
+                        .and(ElementMatchers.not(ElementMatchers.named("toString")))
+                        .and(ElementMatchers.not(ElementMatchers.named("equals")))
+                        .and(ElementMatchers.not(ElementMatchers.named("hashCode")));
+
+        AgentBuilder agentBuilder = new AgentBuilder.Default()
                 .type(typeMatcher)
                 .transform((DynamicType.Builder<?> builder,
                             TypeDescription type,
                             ClassLoader loader,
                             JavaModule module,
-                            ProtectionDomain pd) -> builder.visit(
-                                    advice.on(ElementMatchers.isMethod()
-                                            // Bridge/synthetic methods delegate to the real
-                                            // implementation — tracing them records every
-                                            // generic-override call twice.
-                                            .and(ElementMatchers.not(ElementMatchers.isBridge()))
-                                            .and(ElementMatchers.not(ElementMatchers.isSynthetic()))
-                                            .and(ElementMatchers.not(ElementMatchers.isGetter()))
-                                            .and(ElementMatchers.not(ElementMatchers.isSetter()))
-                                            .and(ElementMatchers.not(ElementMatchers.named("toString")))
-                                            .and(ElementMatchers.not(ElementMatchers.named("equals")))
-                                            .and(ElementMatchers.not(ElementMatchers.named("hashCode"))))))
+                            ProtectionDomain pd) -> builder.visit(advice.on(methodMatcher)))
                 .disableClassFormatChanges() // Prevent class format changes for frameworks
-                .ignore(matcherAgentPackage)
-                .installOn(instrumentation);
+                .ignore(matcherAgentPackage);
+
+        if (agentConfig.getInstrumentationInventory() != null) {
+            InstrumentationInventory inventory = InstrumentationInventory.create(
+                    agentConfig.getInstrumentationInventory(), methodMatcher);
+            if (inventory != null) {
+                agentBuilder = agentBuilder.with(inventory);
+                System.out.println("[ArachnaTrace] Instrumentation inventory: "
+                        + agentConfig.getInstrumentationInventory());
+            }
+        }
+
+        agentBuilder.installOn(instrumentation);
 
         if (agentConfig.isPropagateRequestId()) {
             installExecutorInstrumentation(instrumentation);

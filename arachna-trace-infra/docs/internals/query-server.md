@@ -84,6 +84,8 @@ All return `application/json` and accept only `GET` (plus
 |---|---|
 | `GET /api/analysis/mutations?session_id=...&request_id=...` | Within-call argument mutations (AR vs AX own_hash diff), grouped per `(call, class, changed-field-set)` |
 | `GET /api/analysis/value-search?session_id=...[&request_id=...]&value=...[&mode=substring]` | Every appearance of a scalar value in a session/request (bloom-filter probe on `payloads.payload_tokens`) |
+| `GET /api/analysis/behavior-diff?session_a=...&session_b=...` | Behavioral diff between two sessions: calls grouped by `(signature, AR root_hash)` per side, output-hash sets compared. Statuses: `output_changed` (same input, different output), `added`, `removed`, `unchanged`. Hash-only — payloads stay in ClickHouse until the client drills into a group's example calls |
+| `GET /api/analysis/observed-signatures?session_id=...` | Distinct signatures observed in a session with call counts — the "what actually ran" half of the liveness sweep (diffed against the agent's `instrumentation_inventory` file) |
 
 See [bug-finding.md](../../../arachna-trace-ui/docs/internals/bug-finding.md)
 for the algorithms behind mutations and value search.

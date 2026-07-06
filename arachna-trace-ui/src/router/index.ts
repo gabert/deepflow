@@ -18,6 +18,21 @@ const routes: RouteRecordRaw[] = [
     props: true
   },
   {
+    // Audit-oriented, read-only rendering of one request as a
+    // chronological document — see docs/internals/ui.md § Flow narrative.
+    path: '/sessions/:sessionId/requests/:requestId/narrative',
+    name: 'flow-narrative',
+    component: () => import('../views/FlowNarrativeView.vue'),
+    props: true
+  },
+  {
+    // Two-session behavioral comparison (hash-based) — see
+    // docs/internals/ui.md § Behavior diff.
+    path: '/diff',
+    name: 'behavior-diff',
+    component: () => import('../views/BehaviorDiffView.vue')
+  },
+  {
     path: '/objects/:objectId',
     name: 'object-history',
     component: () => import('../views/ObjectHistoryView.vue'),

@@ -193,6 +193,67 @@ Sessions list
   Possibly the most valuable view, not yet sketched.
 - **Streaming / live updates** while the agent is running, or refresh-only?
 
+## Flow narrative (audit view)
+
+`FlowNarrativeView` (`/sessions/:id/requests/:rid/narrative`) renders
+one request as a chronological *document*: every traced call in `seq`
+order, indented by nesting depth, one line each — signature, named-arg
+preview, return preview, duration — expandable to the full captured
+payloads. A *Copy as Markdown* button exports the whole narrative so it
+can be attached to a pull request.
+
+**Why a second screen instead of a mode of the session view:** the
+debugger metaphor (structural-left / inspection-right) is built for
+*hunting* — the user knows something is wrong and drills. Auditing —
+the primary review activity for AI-generated code, see
+[AI code audit](../../../arachna-trace-agents/docs/ai-code-audit.md) —
+is *reading*: start to finish, judging as you go, then sharing what you
+read. Reading wants a document, not panes; sharing wants an export, not
+a deep link into tool state. The two screens intentionally answer
+different questions: the session view answers "where is the bug," the
+narrative answers "what happens."
+
+**Badges and the product philosophy.** Narrative rows carry three
+badges: `⚠ exception` (the call exited exceptionally), `± mutates args`
+(AR and AX Merkle hashes differ), `⇄ thread` (runs on a different
+thread than its parent). These do not violate the "surface signals,
+leave judgment to the user" rule above — each states a *fact from the
+trace*, exactly as `ExceptionChip` and `MutationsPanel` already do,
+with the judgment (is this mutation intended? is this catch correct?)
+left entirely to the reader. What the rule prohibits — and the
+narrative still does not do — is ranking, anomaly-scoring, or
+"suspiciousness" inference.
+
+## Behavior diff (two-session comparison)
+
+`BehaviorDiffView` (`/diff`) compares two recorded sessions of the same
+scenario — the answer to the open question "diff between two requests"
+above, generalised to whole sessions and grounded in hashes rather than
+payload walks.
+
+The server (`/api/analysis/behavior-diff`) groups each side's calls by
+`(signature, AR root_hash)` — "this method invoked with exactly this
+input" — and compares the *sets* of RE root hashes per group:
+
+| Status | Meaning |
+|---|---|
+| `output_changed` | Both sessions saw this exact input; the return-value hash sets differ. Same input, different output — proof by content hash that behaviour changed for this input. |
+| `added` / `removed` | The (signature, input) combination executed on one side only — flow changed. |
+| `unchanged` | Identical behaviour. Repeat-count differences and nondeterministic-but-equal output sets are deliberately not flagged. |
+
+The screen shows summary chips, the group list (`output_changed`
+first, `unchanged` hidden by default), and on expand loads one example
+call from each side for a side-by-side read of the captured AR/RE. In
+line with the offload-to-server rule, the diff itself is hash algebra
+in ClickHouse/Java — no payload JSON reaches the browser until the
+user drills into a group.
+
+**Honest limits (also stated in the workflow doc):** inputs must repeat
+between the two runs for groups to align — nondeterministic argument
+content (timestamps, random ids) degrades the diff to added+removed
+noise. Call-level, not tree-level: it says *what* behaved differently;
+the narrative and session views say *why*.
+
 ## Read API surface (record-query-server)
 
 Currently implemented:
@@ -205,6 +266,8 @@ Currently implemented:
 | `GET /api/sessions/{id}/calltree?thread=…`   | Paired call rows for the call-tree view          |
 | `GET /api/calls/{id}/payloads`               | TI/AR/AX/RE payloads for one call                |
 | `GET /api/objects/{id}/history`              | Every payload row mentioning the given object id |
+| `GET /api/analysis/behavior-diff?session_a=&session_b=` | Two-session behavioral diff, hash-based (Behavior diff view) |
+| `GET /api/analysis/observed-signatures?session_id=` | Distinct observed signatures (liveness sweep) |
 
 To add (driven by the two-pane session view + markers):
 
@@ -323,6 +386,8 @@ described above flows through the ones marked **(nav)**.
 | `views/SessionsView.vue` | Sessions list. Two-pane preview: pick a session on the left, see its requests + rollups (exceptions, mutations, duration) on the right before opening. |
 | `views/SessionDetailView.vue` | **(nav)** Top-level page for one session. Provides `highlight`, `navTick`, `payloadsByCallId`, `childrenByParent`, expansion state. Hosts `goto({callId, kind, path})`. |
 | `views/ObjectHistoryView.vue` | Per-`object_id` timeline across the session. Vertical history keyed off own_hash transitions; reuses the diff renderer. |
+| `views/FlowNarrativeView.vue` | Audit view: one request as a chronological document with fact badges and Markdown export. Self-contained (own data loading; no injections from SessionDetailView). |
+| `views/BehaviorDiffView.vue` | Two-session behavioral comparison; summary chips, grouped statuses, lazy side-by-side example payloads. Self-contained. |
 
 **Structural panels — left pane of the session view**
 

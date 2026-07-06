@@ -55,6 +55,8 @@ Language-neutral concepts that apply to any agent implementation.
   everywhere else.
 - [`reading-a-trace.md`](../arachna-trace-agents/docs/reading-a-trace.md) —
   three worked examples: a calculation bug, a mutation under
+- [`ai-code-audit.md`](../arachna-trace-agents/docs/ai-code-audit.md) —
+  reviewing AI-generated code by recorded behavior (narrative, behavioral diff, liveness sweep)
   concurrency, a hash drill-down.
 - [`serialize-modes.md`](../arachna-trace-agents/docs/serialize-modes.md) —
   `serialize_values=true|false`; full-CBOR vs. call-graph-only.
