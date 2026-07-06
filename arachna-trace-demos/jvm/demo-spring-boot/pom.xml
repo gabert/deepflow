@@ -55,6 +55,19 @@
             <artifactId>JpaProxyResolverHibernate</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
+        <!--
+            Third SPI impl, used by audit-demo.sh: the config resolver
+            reads a fixed session_id from the agent args, so each recorded
+            run gets a predictable session id the script can hand to the
+            behavior-diff API. Activated per-run via inline agent config
+            (`session_resolver=config&session_id=...`); the default
+            arachna-agent.cfg keeps using spring-session.
+        -->
+        <dependency>
+            <groupId>com.github.gabert</groupId>
+            <artifactId>SessionResolverConfig</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
     <build>

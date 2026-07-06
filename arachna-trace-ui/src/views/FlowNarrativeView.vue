@@ -132,7 +132,15 @@ function argsPreview(ar?: PayloadRow): string {
 
 function returnPreview(call: CallRow, re?: PayloadRow): string {
   if (call.return_type === 'VOID') return 'void';
-  if (call.return_type === 'EXCEPTION') return `threw ${previewValue(tryParse(re))}`;
+  if (call.return_type === 'EXCEPTION') {
+    // The exception payload is {message, stacktrace} — the message is
+    // the readable part; the full stacktrace is in the expanded view.
+    const parsed = tryParse(re);
+    const message = parsed && typeof parsed === 'object' && 'message' in (parsed as object)
+        ? String((parsed as Record<string, unknown>).message)
+        : previewValue(parsed);
+    return `threw ${message.length > 80 ? message.slice(0, 77) + '…' : message}`;
+  }
   return re ? previewValue(tryParse(re)) : '';
 }
 

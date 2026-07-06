@@ -3,6 +3,7 @@ package com.github.gabert.arachna.trace.demo.library.controller;
 import com.github.gabert.arachna.trace.demo.library.service.AuthorSO;
 import com.github.gabert.arachna.trace.demo.library.service.BookSO;
 import com.github.gabert.arachna.trace.demo.library.service.LibraryService;
+import com.github.gabert.arachna.trace.demo.library.service.restock.RestockQuoteService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,9 +15,11 @@ import java.util.Map;
 public class LibraryController {
 
     private final LibraryService libraryService;
+    private final RestockQuoteService restockQuoteService;
 
-    public LibraryController(LibraryService libraryService) {
+    public LibraryController(LibraryService libraryService, RestockQuoteService restockQuoteService) {
         this.libraryService = libraryService;
+        this.restockQuoteService = restockQuoteService;
     }
 
     @PostMapping("/authors")
@@ -64,6 +67,11 @@ public class LibraryController {
     @PostMapping("/library/demo-scenario")
     public Map<String, Object> runDemoScenario() {
         return libraryService.runDemoScenario();
+    }
+
+    @GetMapping("/library/restock-quote")
+    public Map<String, Object> restockQuote(@RequestParam Long authorId) {
+        return restockQuoteService.quoteForAuthor(authorId);
     }
 
     @DeleteMapping("/books/{id}")

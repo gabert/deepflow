@@ -137,6 +137,16 @@ comes from the classloader, not the tracer.
 
 ---
 
+## Try it — the runnable demo
+
+`arachna-trace-demos/jvm/demo-spring-boot/audit-demo.sh` records the
+same scenario under two code versions of a restock-appraisal flow (a
+classic version and an "AI-refactored" one that swallows an exception,
+changes rounding, mutates its argument, and swaps helpers — the edits
+agents write that look harmless in a code diff), then prints links to
+the Behavior diff and Flow narrative screens with both sessions loaded.
+See the demo's README for what to look for on each screen.
+
 ## Where each workflow lives
 
 | Workflow | Agent side | Server side | UI |

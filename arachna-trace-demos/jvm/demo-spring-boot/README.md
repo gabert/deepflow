@@ -175,3 +175,34 @@ since been promoted into the shipped `SessionResolverSpring` module
 (under `arachna-trace-jvm-extensions/`) — the demo now consumes them
 as a dependency. `LibraryApplication.java` registers `SessionIdFilter`
 as a `@Bean`; that's the entire glue.
+
+
+## AI-code-audit demo (`audit-demo.sh`)
+
+Records the same scenario under **two code versions** of the restock
+appraisal — `classic` and an "AI-refactored" variant
+(`library.restock.policy` property; see `RestockAppraiser` for what the
+refactor changes and why it looks harmless in a code diff) — ships both
+sessions through the centralised pipeline, and prints links to the
+comparative screens.
+
+The refactored version carries four artifacts typical of agent-written
+edits, each visible on a different screen:
+
+| Artifact | Where it shows |
+|---|---|
+| Legacy-identifier exception silently swallowed (vintage premium lost) | Flow narrative: `⚠ exception` on `checkDigitOf` while the parent returns normally; Behavior diff: `appraise` output changed (200.00 → 80.00) |
+| Rounding switched HALF_UP → HALF_EVEN | Behavior diff: `round(29.325)` → 29.33 vs 29.32 |
+| Quote lines sorted in place | Flow narrative: `± mutates args` on `summarize` |
+| Dropped / added helpers | Behavior diff: `isIsbn13`/`vintagePremium` only in A, `fallbackRarity` only in B |
+
+Prerequisites: the pipeline from `arachna-trace-infra/` (docker compose
+with Kafka + ClickHouse, collector, processor, query server) and
+optionally the UI dev server. Then:
+
+```bash
+bash audit-demo.sh
+```
+
+See [AI code audit](../../../arachna-trace-agents/docs/ai-code-audit.md)
+for the workflows these screens implement.
