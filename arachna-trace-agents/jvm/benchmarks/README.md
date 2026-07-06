@@ -11,6 +11,7 @@ results and their interpretation live in
 | `src/bench/` | Instrumented workload classes (compiled with `-g`): simple POJO scenario (`BenchTarget`/`Order`) and enterprise-shaped scenario (`InvoiceService`/`Invoice`) |
 | `src-stripped/bench/` | Same shape compiled with `-g:none` — exercises the no-debug-info parameter-name path |
 | `src-run/benchrun/` | The un-instrumented runner (`matchers_include=bench\..*` keeps it out of the trace); also starts a local no-op collector on port 18099 for `destination=http` runs |
+| `sample-payloads/` | The exact `AR` payloads captured during the published runs (JSON rendering of the on-wire CBOR, `__meta__` envelopes included) — what one capture actually serializes |
 | `bench.cfg`, `bench-http.cfg` | Agent configs for file / http destinations |
 | `run.sh` | Builds, compiles, runs every scenario with and without the agent |
 

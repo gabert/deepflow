@@ -32,13 +32,17 @@ That capture cost is what this page measures.
 
 Two workload shapes:
 
-| Workload | Arguments serialized per call | Approx. envelope nodes |
-|---|---|---|
-| *simple* | small POJO (4 scalar fields, 3-element string list) + primitives | ~6 |
-| *business* | invoice aggregate: customer with two addresses, 12 line items with `BigDecimal` prices and attribute maps, metadata map, enum status | ~30 |
+| Workload | Arguments serialized per call | Approx. envelope nodes | Captured payload (exact, as rendered) |
+|---|---|---|---|
+| *simple* | small POJO (4 scalar fields, 3-element string list) + primitives | ~6 | [simple-order-ar.json](../../benchmarks/sample-payloads/simple-order-ar.json) (0.4 KB) |
+| *business* | invoice aggregate: customer with two addresses, 12 line items with `BigDecimal` prices and attribute maps, metadata map, enum status | ~30 | [business-invoice-ar.json](../../benchmarks/sample-payloads/business-invoice-ar.json) (6.8 KB) |
 
 The *business* shape is the representative case for enterprise data
 debugging — a mid-size domain aggregate passed through a service layer.
+The linked files are the actual `AR` payloads captured during the
+measured runs (JSON rendering of the CBOR on the wire, including the
+`__meta__` identity and content-hash envelopes), so the reader can see
+exactly what one 23-microsecond capture buys.
 
 ## Results
 
@@ -62,6 +66,36 @@ Reading the table:
 - The **no-agent** column is the same code with no `-javaagent` flag;
   the methods themselves cost nanoseconds, so the agent columns are,
   in effect, the absolute overhead per traced call.
+
+## Interpreting the ratio correctly
+
+Dividing the columns gives ratios in the hundreds — 23.4 µs against
+0.07 µs reads as a 300× slowdown. That ratio is an artifact of the
+benchmark's design, not a property the application will experience:
+
+- **The no-agent column is an empty-method floor.** The benchmark
+  methods deliberately do almost nothing, so that the measurement
+  isolates the agent's cost — which makes overhead 100% of the measured
+  time by construction. Methods worth tracing in a real application do
+  real work: a JPA query runs 100 µs–10 ms, a downstream HTTP call runs
+  milliseconds. The meaningful comparison is the fixed per-call cost
+  against what traced methods actually cost:
+
+  | Traced method's own cost | + 23.4 µs capture | Added |
+  |---|---|---|
+  | database query, ~1 ms | 1.023 ms | +2.3% |
+  | service-layer call, ~200 µs | 223 µs | +12% |
+  | trivial getter, ~50 ns | — | not instrumented (getters/setters/`toString`/`equals`/`hashCode` and bridge/synthetic methods are excluded) |
+
+- **Traced calls are distributed across the application's flow, never
+  concentrated at one point.** A request that touches hundreds of
+  traced methods does so across controller, service, and repository
+  layers — and often across threads and async hops — over the request's
+  whole lifetime. Each capture adds its microseconds where that call
+  executes; there is no single place where the totals below land as one
+  lump, and captures on concurrent branches overlap rather than add to
+  wall-clock time. The per-request sums below are therefore an upper
+  bound on the end-to-end latency effect.
 
 ## What this means for a real service
 

@@ -1,0 +1,27 @@
+{
+  "order": {
+    "__meta__": {
+      "class": "bench.Order",
+      "hash": "c61149654a68deb87e74f2e351c56dd3",
+      "id": 3,
+      "own_hash": "8fca1ec8c76cdc62d8c3c3d0469cc4d7"
+    },
+    "customer": "alice",
+    "id": 42,
+    "items": {
+      "__meta__": {
+        "class": "java.util.ImmutableCollections$ListN",
+        "hash": "480ab6e531c8d7c4cb78b5bb27ddbc57",
+        "id": 4,
+        "own_hash": "480ab6e531c8d7c4cb78b5bb27ddbc57"
+      },
+      "items": [
+        "book",
+        "pencil",
+        "lamp"
+      ]
+    },
+    "total": 129.9
+  },
+  "quantity": 1
+}

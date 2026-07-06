@@ -1,0 +1,347 @@
+{
+  "invoice": {
+    "__meta__": {
+      "class": "bench.Invoice",
+      "hash": "d02aa84b35217df9ad48ba0b3e6eadc4",
+      "id": 507,
+      "own_hash": "ed67175f71ef7344e89b79d2284d8608"
+    },
+    "customer": {
+      "__meta__": {
+        "class": "bench.Invoice$Customer",
+        "hash": "d449b478cd8f1a0813df544b9c5ef619",
+        "id": 508,
+        "own_hash": "15f4570996e663515b60d65658f25865"
+      },
+      "billingAddress": {
+        "__meta__": {
+          "class": "bench.Invoice$Address",
+          "hash": "b6a86c0b840a671ca63d02fe703481db",
+          "id": 509,
+          "own_hash": "b6a86c0b840a671ca63d02fe703481db"
+        },
+        "city": "Bratislava",
+        "country": "SK",
+        "street": "Hlavna 42",
+        "zip": "81101"
+      },
+      "email": "ap@acme-manufacturing.example",
+      "id": 77031,
+      "name": "Acme Manufacturing s.r.o.",
+      "shippingAddress": {
+        "__meta__": {
+          "class": "bench.Invoice$Address",
+          "hash": "a4f0942a38a33b8f52117c56824734c6",
+          "id": 510,
+          "own_hash": "a4f0942a38a33b8f52117c56824734c6"
+        },
+        "city": "Bratislava",
+        "country": "SK",
+        "street": "Obchodna 7",
+        "zip": "81106"
+      }
+    },
+    "id": 900142,
+    "items": {
+      "__meta__": {
+        "class": "java.util.ArrayList",
+        "hash": "8eb0b1a6c4edcf11a35d07f554b85527",
+        "id": 511,
+        "own_hash": "706a9564397edc9f9404f960ae5b7fd8"
+      },
+      "items": [
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "afa38d1d45ab8293c778a3333cf72488",
+            "id": 1,
+            "own_hash": "6fe10b7408ecb73d7ad702a5ec1ee058"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "bb2548d9a6ce72ef6a581f638cb674d6",
+              "id": 512,
+              "own_hash": "bb2548d9a6ce72ef6a581f638cb674d6"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "BA-01"
+          },
+          "description": "Industrial bearing unit type A",
+          "discountPct": 2.5,
+          "quantity": 1,
+          "sku": "SKU-1000",
+          "unitPrice": 129.9
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "92ef55ba8a60eb7be419e1ec2b133ade",
+            "id": 3,
+            "own_hash": "66ff42416579aa5bcf51fef3e4667df2"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "daa4d27cfb5d74f547ff8b9defd015b5",
+              "id": 513,
+              "own_hash": "daa4d27cfb5d74f547ff8b9defd015b5"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "KE-02"
+          },
+          "description": "Industrial bearing unit type B",
+          "discountPct": 0.0,
+          "quantity": 2,
+          "sku": "SKU-1001",
+          "unitPrice": 129.91
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "44ceeab8037bd63131d3ce6c8bb0325e",
+            "id": 5,
+            "own_hash": "664f7e012f64fb852c0f64a6f38f7c31"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "bb2548d9a6ce72ef6a581f638cb674d6",
+              "id": 514,
+              "own_hash": "bb2548d9a6ce72ef6a581f638cb674d6"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "BA-01"
+          },
+          "description": "Industrial bearing unit type C",
+          "discountPct": 0.0,
+          "quantity": 3,
+          "sku": "SKU-1002",
+          "unitPrice": 129.92
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "3440ba255014d8b8a5b59fd6380c1b27",
+            "id": 7,
+            "own_hash": "5ae26b5b6f9aca79bb2dcea762bd7d93"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "daa4d27cfb5d74f547ff8b9defd015b5",
+              "id": 515,
+              "own_hash": "daa4d27cfb5d74f547ff8b9defd015b5"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "KE-02"
+          },
+          "description": "Industrial bearing unit type D",
+          "discountPct": 2.5,
+          "quantity": 4,
+          "sku": "SKU-1003",
+          "unitPrice": 129.93
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "e5a4b0e723f3ff58323e37329df9dfd7",
+            "id": 9,
+            "own_hash": "5e719d1c3d202b694a430111332ba983"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "bb2548d9a6ce72ef6a581f638cb674d6",
+              "id": 516,
+              "own_hash": "bb2548d9a6ce72ef6a581f638cb674d6"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "BA-01"
+          },
+          "description": "Industrial bearing unit type E",
+          "discountPct": 0.0,
+          "quantity": 5,
+          "sku": "SKU-1004",
+          "unitPrice": 129.94
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "e53e8b30754fcdb45528618ae1d4f440",
+            "id": 11,
+            "own_hash": "65b0e6b0a365dcc4e6f6b052555510ce"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "daa4d27cfb5d74f547ff8b9defd015b5",
+              "id": 517,
+              "own_hash": "daa4d27cfb5d74f547ff8b9defd015b5"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "KE-02"
+          },
+          "description": "Industrial bearing unit type F",
+          "discountPct": 0.0,
+          "quantity": 1,
+          "sku": "SKU-1005",
+          "unitPrice": 129.95
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "a93fd38f28d3ddd697bce1a38f60dfe5",
+            "id": 13,
+            "own_hash": "e134127c54f8a74c3a0117fb4f117ffd"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "bb2548d9a6ce72ef6a581f638cb674d6",
+              "id": 518,
+              "own_hash": "bb2548d9a6ce72ef6a581f638cb674d6"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "BA-01"
+          },
+          "description": "Industrial bearing unit type G",
+          "discountPct": 2.5,
+          "quantity": 2,
+          "sku": "SKU-1006",
+          "unitPrice": 129.96
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "d62110ddbd94b9ad4f9db5d50deb4a1a",
+            "id": 15,
+            "own_hash": "71525c6fec3d88d0949076c336da4d71"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "daa4d27cfb5d74f547ff8b9defd015b5",
+              "id": 519,
+              "own_hash": "daa4d27cfb5d74f547ff8b9defd015b5"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "KE-02"
+          },
+          "description": "Industrial bearing unit type H",
+          "discountPct": 0.0,
+          "quantity": 3,
+          "sku": "SKU-1007",
+          "unitPrice": 129.97
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "f3654810ec64ce3ba9cedc57d1f8e207",
+            "id": 17,
+            "own_hash": "04244e7ed676438f4c813b7a14d5ba5a"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "bb2548d9a6ce72ef6a581f638cb674d6",
+              "id": 520,
+              "own_hash": "bb2548d9a6ce72ef6a581f638cb674d6"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "BA-01"
+          },
+          "description": "Industrial bearing unit type I",
+          "discountPct": 0.0,
+          "quantity": 4,
+          "sku": "SKU-1008",
+          "unitPrice": 129.98
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "b575c20c3aebc9c6624d9577c47045d2",
+            "id": 19,
+            "own_hash": "a078ad849d07ea064bed806900444164"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "daa4d27cfb5d74f547ff8b9defd015b5",
+              "id": 521,
+              "own_hash": "daa4d27cfb5d74f547ff8b9defd015b5"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "KE-02"
+          },
+          "description": "Industrial bearing unit type J",
+          "discountPct": 2.5,
+          "quantity": 5,
+          "sku": "SKU-1009",
+          "unitPrice": 129.99
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "46fec9c150721f28334d0190d933f0c0",
+            "id": 21,
+            "own_hash": "bf0a0dc1ce0616d7a1580a840c6b62df"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "bb2548d9a6ce72ef6a581f638cb674d6",
+              "id": 522,
+              "own_hash": "bb2548d9a6ce72ef6a581f638cb674d6"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "BA-01"
+          },
+          "description": "Industrial bearing unit type K",
+          "discountPct": 0.0,
+          "quantity": 1,
+          "sku": "SKU-1010",
+          "unitPrice": 129.91
+        },
+        {
+          "__meta__": {
+            "class": "bench.Invoice$LineItem",
+            "hash": "e760327476be477a7fe5ca21c8ceb886",
+            "id": 23,
+            "own_hash": "e4b1579353fa24b49130d2267d1db0ba"
+          },
+          "attributes": {
+            "__meta__": {
+              "class": "java.util.LinkedHashMap",
+              "hash": "daa4d27cfb5d74f547ff8b9defd015b5",
+              "id": 523,
+              "own_hash": "daa4d27cfb5d74f547ff8b9defd015b5"
+            },
+            "taxCode": "VAT20",
+            "warehouse": "KE-02"
+          },
+          "description": "Industrial bearing unit type L",
+          "discountPct": 0.0,
+          "quantity": 2,
+          "sku": "SKU-1011",
+          "unitPrice": 129.911
+        }
+      ]
+    },
+    "metadata": {
+      "__meta__": {
+        "class": "java.util.LinkedHashMap",
+        "hash": "638525af906ab96cdb2aaed6f664867e",
+        "id": 524,
+        "own_hash": "638525af906ab96cdb2aaed6f664867e"
+      },
+      "costCenter": "CC-4711",
+      "paymentTerms": "NET30",
+      "source": "e-shop"
+    },
+    "number": "2026-INV-000901",
+    "status": "ISSUED",
+    "totalNet": 4288.282
+  },
+  "requestedBy": "user-0"
+}
