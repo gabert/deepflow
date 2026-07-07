@@ -263,7 +263,10 @@ const statusLabel: Record<string, string> = {
       <div v-for="g in visibleGroups" :key="keyOf(g)" class="dv-group-wrap">
         <div class="dv-group" :class="'s-' + g.status" @click="toggleExpand(g)">
           <span class="dv-status">{{ statusLabel[g.status] }}</span>
-          <span class="dv-sig mono">{{ shortSignature(g.signature) }}</span>
+          <span class="dv-sig-block">
+            <span class="dv-sig mono">{{ shortSignature(g.signature) }}</span>
+            <span v-if="g.input_preview" class="dv-input mono" :title="g.input_preview">{{ g.input_preview }}</span>
+          </span>
           <span class="dv-counts mono muted">A×{{ g.count_a }} · B×{{ g.count_b }}</span>
           <span v-if="g.exception_a || g.exception_b" class="dv-exc" title="At least one side exited with an exception">⚠</span>
         </div>
@@ -356,7 +359,12 @@ const statusLabel: Record<string, string> = {
   font-size: 0.75rem; color: var(--text-muted); font-family: system-ui, sans-serif;
 }
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: var(--mono-size); }
+.dv-sig-block { display: flex; flex-direction: column; min-width: 0; gap: 0.05rem; }
 .dv-sig { color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-input {
+  color: var(--text-muted); font-size: 0.72rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .dv-counts { margin-left: auto; flex-shrink: 0; font-size: 0.75rem; }
 .dv-exc { color: #f87171; }
 

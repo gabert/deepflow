@@ -241,9 +241,12 @@ input" — and compares the *sets* of RE root hashes per group:
 | `added` / `removed` | The (signature, input) combination executed on one side only — flow changed. |
 | `unchanged` | Identical behaviour. Repeat-count differences and nondeterministic-but-equal output sets are deliberately not flagged. |
 
-The screen shows summary chips, the group list (`output_changed`
-first, `unchanged` hidden by default), and on expand loads one example
-call from each side. The two payloads render as ONE aligned line-diff
+The screen shows summary chips and the group list (`output_changed`
+first, `unchanged` hidden by default). Non-unchanged rows carry a
+compact `__meta__`-stripped preview of the example call's arguments,
+attached server-side, so groups sharing a signature but differing in
+input are distinguishable without expanding. Expanding loads one
+example call from each side. The two payloads render as ONE aligned line-diff
 grid (LCS at line level) inside a single scroll container — the sides
 cannot scroll apart, and each aligned row is tinted same / changed /
 only-A / only-B, so the difference is marked in place. Marking here is

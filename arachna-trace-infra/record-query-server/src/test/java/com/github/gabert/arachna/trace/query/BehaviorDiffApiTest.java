@@ -83,6 +83,22 @@ class BehaviorDiffApiTest {
     }
 
     @Test
+    void previewStripsMetaAndTruncates() {
+        String payload = """
+                {"__meta__":{"id":1,"class":"X","hash":"h"},
+                 "book":{"__meta__":{"id":2},"title":"War with the Newts","year":1936},
+                 "quantity":3}""";
+        String preview = BehaviorDiffApi.previewOf(payload);
+        assertEquals("{\"book\":{\"title\":\"War with the Newts\",\"year\":1936},\"quantity\":3}", preview);
+
+        String big = "{\"text\":\"" + "x".repeat(500) + "\"}";
+        assertTrue(BehaviorDiffApi.previewOf(big).length() <= 160);
+        assertTrue(BehaviorDiffApi.previewOf(big).endsWith("…"));
+
+        assertEquals("", BehaviorDiffApi.previewOf("not json"));
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void payloadLessCallsParticipateInFlowComparison() {
         // Structural-mode rows (no AR/RE hashes) still show flow changes.

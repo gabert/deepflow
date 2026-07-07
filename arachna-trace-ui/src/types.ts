@@ -377,6 +377,10 @@ export type BehaviorDiffStatus = 'output_changed' | 'added' | 'removed' | 'uncha
 export interface BehaviorDiffGroup {
   signature: string;
   ar_hash: string;
+  // Compact __meta__-stripped rendering of the example call's AR payload,
+  // attached server-side for non-unchanged groups so rows with the same
+  // signature but different inputs are distinguishable at a glance.
+  input_preview?: string;
   status: BehaviorDiffStatus;
   count_a: number;
   count_b: number;
